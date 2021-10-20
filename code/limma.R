@@ -41,7 +41,6 @@ pas_info$sampleid = firstpart
 #pas_info$sampleid[pas_info$tissue=="Colon tissue" & pas_info$diseaseinflammation == "CDAi"]
 #pas_info$sampleid[pas_info$tissue=="Colon tissue" & pas_info$diseaseinflammation == "CDUi"]
 
-#Assuming we follow tissue instead of inflammation
 #remove i from disease information, as it should be part of tissue as well
 i = grepl("*i", pas_info$diseaseinflammation)
 pas_info$diseaseinflammation[i] = substr(pas_info$diseaseinflammation[i], 1, nchar(pas_info$diseaseinflammation[i]) - 1)
@@ -106,18 +105,60 @@ dge = calcNormFactors(dge)
 logCPM = cpm(dge, log=TRUE, prior.count=3)
 
 fit = lmFit(logCPM, design)
+#trend - should an intensity-trend be allowed for prior value
 fit = eBayes(fit, trend=TRUE)
-topTable(fit, coef=ncol(design))
+#topTable(fit)
+
+#using the contrast matrix
+C = rbind("IU"=c(0,0,0,0,1,0), #(CU-CH)-(IU-IH)
+          "IA"=c(0,0,0,0,0,1), #(CA-CH)-(IA-IH)
+          "IA minus IU"=c(0,0,0,0,1,-1)) #(CA-CU)-(IA-IU)
+fit2 = contrasts.fit(fit,t(C))
+fit2 = eBayes(fit2, trend = TRUE)
+#for specific coef use coef = 1, 2 or 3, as contrast has three coefs
+table_fit2 = topTable(fit2)
 
 #voom
 v = voom(dge, design, plot=TRUE) 
 plotMDS(v)
 #alternatively don't need normalization for voom 
-#v = voom(cont, design, plot=TRUE)
+#v = voom(count, design, plot=TRUE, normalize = "quantile")
 
 vfit = lmFit(v, design)
-vfit = eBayes(fit)
-topTable(vfit, coef=ncol(design))
+vfit = eBayes(vfit)
+#topTable(vfit)
+
 #alternative, gives slightly different results
 #vfit = treat(vfit, lfc=log2(1.2))
-#topTreat(vfit, coef=ncol(design))
+#topTreat(vfit)
+
+C = rbind("IU"=c(0,0,0,0,1,0), #(CU-CH)-(IU-IH)
+        "IA"=c(0,0,0,0,0,1), #(CA-CH)-(IA-IH)
+        "IA minus IU"=c(0,0,0,0,1,-1)) #(CA-CU)-(IA-IU)
+vfit2 = contrasts.fit(vfit, t(C))
+vfit2 = eBayes(vfit2, trend = TRUE)
+#for specific coef use coef = 1, 2 or 3, as contrast has three coefs
+table_vfit2 = topTable(vfit2)
+
+#voom with raw data
+#alternatively don't need normalization for voom 
+v_alt = voom(count, design, plot=TRUE, normalize = "quantile")
+plotMDS(v_alt)
+
+vfit_alt = lmFit(v_alt, design)
+vfit_alt = eBayes(vfit_alt)
+#topTable(vfit)
+
+#alternative, gives slightly different results
+#vfit = treat(vfit, lfc=log2(1.2))
+#topTreat(vfit)
+
+vfit2_alt = contrasts.fit(vfit_alt, t(C))
+vfit2_alt = eBayes(vfit2_alt, trend = TRUE)
+#for specific coef use coef = 1, 2 or 3, as contrast has three coefs
+table_vfit2_alt = topTable(vfit2_alt)
+
+#venn diagram
+library(ggvenn)
+venn = list("limma" = rownames(table_fit2), "voom with preprocessing" = rownames(table_vfit2), "voom with count" = rownames(table_vfit2_alt))
+ggvenn(venn, show_percentage = FALSE)
