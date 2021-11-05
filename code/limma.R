@@ -72,7 +72,7 @@ pas_info$inflammation = factor(pas_info$inflammation, c("H", "U", "A"))
 pas_info$tissue = factor(pas_info$tissue, c("Colon tissue", "Ileum tissue"))
 
 #"remove counts that have zero or very low counts"
-design = model.matrix(~ inflammation*tissue, data = pas_info)
+design = model.matrix(~ inflammation*tissue, data = pas_info)#[, -1]
 keep = filterByExpr(dge, design)
 dge = dge[keep, , keep.lib.sizes=FALSE]
 
@@ -112,34 +112,28 @@ vfit = eBayes(vfit)
 #vfit = treat(vfit, lfc=log2(1.2))
 #topTreat(vfit)
 
-C = rbind("IU"=c(0,0,0,0,1,0), #(CU-CH)-(IU-IH)
-        "IA"=c(0,0,0,0,0,1), #(CA-CH)-(IA-IH)
-        "IA minus IU"=c(0,0,0,0,1,-1)) #(CA-CU)-(IA-IU)
 vfit2 = contrasts.fit(vfit, t(C))
 vfit2 = eBayes(vfit2, trend = TRUE)
 #for specific coef use coef = 1, 2 or 3, as contrast has three coefs
 table_vfit2 = topTable(vfit2)
 
-#voom with raw data
-#alternatively don't need normalization for voom 
-v_alt = voom(count, design, plot=TRUE, normalize = "quantile")
-plotMDS(v_alt)
-
-vfit_alt = lmFit(v_alt, design)
-vfit_alt = eBayes(vfit_alt)
-#topTable(vfit_alt)
-
-vfit2_alt = contrasts.fit(vfit_alt, t(C))
-vfit2_alt = eBayes(vfit2_alt, trend = TRUE)
-#for specific coef use coef = 1, 2 or 3, as contrast has three coefs
-table_vfit2_alt = topTable(vfit2_alt)
-
 #venn diagram
 library(ggvenn)
 venn = list("limma" = rownames(table_fit2), 
-            "voom with preprocessing" = rownames(table_vfit2), 
-            "voom with count" = rownames(table_vfit2_alt))
+            "voom" = rownames(table_vfit2))
 ggvenn(venn, show_percentage = FALSE)
+
+
+#split count from filter by expr
+selected_count = count[rownames(dge), ]
+beta = matrix(0, dim(selected_count)[1], dim(design[, -1])[2])
+for(i in 1:dim(selected_count)[1]){
+  beta[i, ] = lm(unlist(count[i, ]) ~ design[, -1])$coef[-1]
+}
+rownames(beta) = rownames(selected_count)
+colnames(beta) = colnames(design)[-1]
+
+beta_C = beta %*% t(C[, -1])
 
 #personal comments, code to quality check changes
 
