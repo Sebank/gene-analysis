@@ -171,7 +171,7 @@ ggvenn(venn, show_percentage = FALSE)
 venn.p = list("limma with correlation" = rownames(topTable(fit3, number = 10000, p.value = 0.05)), 
             "limma" = rownames(topTable(fit3_alt, number = 10000, p.value = 0.05)),
             "voom with correlation" = rownames(topTable(vfit2, number = 10000, p.value = 0.05)),
-            "voom" = rownames(rownames(topTable(vfit2_alt, number = 10000, p.value = 0.05))))
+            "voom" = rownames(topTable(vfit2_alt, number = 10000, p.value = 0.05)))
 ggvenn(venn.p, show_percentage = FALSE)
 
 #double check that adj.P.val is used
