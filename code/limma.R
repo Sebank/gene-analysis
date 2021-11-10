@@ -126,9 +126,20 @@ ggvenn(venn, show_percentage = FALSE)
 
 #split count from filter by expr
 selected_count = count[rownames(dge), ]
+
+R = vector("numeric", dim(selected_count)[2])
+
+log_selected_count = count[rownames(dge), ]
+
+for(i in 1:dim(selected_count)[2]){
+  R[i] = sum(selected_count[, i])
+  log_selected_count[, i] = log2((selected_count[, i] + 0.5)/(R[i] + 1)*10^6)
+}
+
 beta = matrix(0, dim(selected_count)[1], dim(design[, -1])[2])
+
 for(i in 1:dim(selected_count)[1]){
-  beta[i, ] = lm(unlist(count[i, ]) ~ design[, -1])$coef[-1]
+  beta[i, ] = lm(unlist(log_selected_count[i, ]) ~ design[, -1])$coef[-1]
 }
 rownames(beta) = rownames(selected_count)
 colnames(beta) = colnames(design)[-1]
