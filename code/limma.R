@@ -1,4 +1,7 @@
 library(stringr)
+library(ggvenn)
+library(edgeR)
+library(DESeq2)
 
 #file location
 fileloc = "Z:/Atle van Beelen Granlund/"
@@ -30,6 +33,8 @@ count_tot = count_tot[, pas_info_tot$Sample_ID]
 
 #extract relevant columns
 pas_info <- data.frame("sampleid" = pas_info_tot$Sample_ID, "diseaseinflammation" = pas_info_tot$Sample_Group, "tissue" = pas_info_tot$Sample_Biosource)
+#remove tissue from tissue
+pas_info$tissue = substr(pas_info$tissue, 1, 5)
 
 #using grep to remove final segments of string ending with irrelevant information
 firstpart = str_split_fixed(pas_info$sampleid, "_", 2)[,1]
@@ -85,7 +90,7 @@ table(table(pas_info$sampleid)) # 13 med 2 og 1 med 3 prøver
 ###########################################################################
 
 #convert to relevant setup for limma
-library(edgeR)
+
 dge = DGEList(count)
 
 #make as factors and order factors
@@ -157,11 +162,31 @@ table_vfit2 = topTable(vfit2, number = 10)
 table_vfit2_alt = topTable(vfit2_alt, number = 10)
 
 ###########################################################################
+#deseq (model)
+###########################################################################
+
+dds = DESeqDataSetFromMatrix(countData = round(count), colData = pas_info, design = ~ inflammation*tissue)
+dds$tissue
+#pre processing
+length(dds[, 1])
+keep = rowSums(counts(dds)) >= 10
+dds = dds[keep, ]
+length(dds[, 1])
+#58003 vs 43358
+
+dds <- DESeq(dds)
+resultsNames(dds) # lists the coefficients
+res <- results(dds, name = "inflammationU.tissueIleum")
+# or to shrink log fold changes association with condition:
+#res <- lfcShrink(dds, coef="Intercept", type="apeglm")
+
+
+###########################################################################
 #analysis of results
 ###########################################################################
 
 #venn diagram
-library(ggvenn)
+
 venn = list("limma with correlation" = rownames(table_fit3), 
             "limma" = rownames(table_fit3_alt),
             "voom with correlation" = rownames(table_vfit2),
@@ -225,6 +250,7 @@ dge$samples
 
 
 fit0=lm(logCPM[1,]~design-1)
+fit0_2 = lmer(logCPM[1,]~design-1 + (1 | pas_info$sampleid))
 dim(fit0$coefficients)
 dim(C)
 fit0.C=C%*%matrix(fit0$coefficients,ncol=1)
