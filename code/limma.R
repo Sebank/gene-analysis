@@ -246,14 +246,14 @@ ggvenn(venn.1, show_percentage = FALSE)
 
 venn.2 = list("limma" = rownames(topTable(fit3, number = number, coef = 2, p.value = 0.05)), 
               "voom" = rownames(topTable(vfit2, number = number, coef = 2, p.value = 0.05)),
-              # "DESeq2" = rownames(contrast.AI[1:number, ]))
-              "DESeq2" = rownames(contrast.AI[contrast.AI$padj < 0.05, ]))
+              "DESeq2" = rownames(contrast.AI[1:number, ]))
+              # "DESeq2" = rownames(contrast.AI[contrast.AI$padj < 0.05, ]))
 ggvenn(venn.2, show_percentage = FALSE)
 
 venn.3 = list("limma" = rownames(topTable(fit3, number = number, coef = 2, p.value = 0.05)), 
               "voom" = rownames(topTable(vfit2, number = number, coef = 2, p.value = 0.05)),
-            #  "DESeq2" = rownames(contrast.complex[1:number, ]))
-            "DESeq2" = rownames(contrast.complex[contrast.complex$padj < 0.05, ]))
+              "DESeq2" = rownames(contrast.complex[1:number, ]))
+            # "DESeq2" = rownames(contrast.complex[contrast.complex$padj < 0.05, ]))
 ggvenn(venn.3, show_percentage = FALSE)
 
 #personal comments, code to quality check changes
