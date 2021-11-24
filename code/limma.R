@@ -237,7 +237,7 @@ tail(topTable(vfit2_alt, number = 10000, p.value = 0.05))
 
 
 #check coef with DESeq2, only considering with correlation
-number = 10000
+number = 10
 venn.1 = list("limma" = rownames(topTable(fit3, number = number, coef = 1, p.value = 0.05)), 
             "voom" = rownames(topTable(vfit2, number = number, coef = 1, p.value = 0.05)),
             "DESeq2" = rownames(contrast.UI[1:number, ]))
