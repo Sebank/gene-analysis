@@ -290,219 +290,219 @@ ggvenn(venn.3, show_percentage = FALSE)
 # sum(n_occur$Freq == 1)
 
 
-cbind(pas_info$sampleid, colnames(count))
-
-#finne konsepter fra data
-
-summary(dge)
-dge
-dim(dge)
-# 27672 110
-dim(dge$counts)
-dim(dge$samples)
-dge$samples
-
-
-fit0=lm(logCPM[1,]~design-1)
-fit0_2 = lmer(logCPM[1,]~design-1 + (1 | pas_info$sampleid))
-dim(fit0$coefficients)
-dim(C)
-fit0.C=C%*%matrix(fit0$coefficients,ncol=1)
-fit0.C
-fit0.Ccov=C%*%vcov(fit0)%*%t(C)
-fit0.Ccov
-fcontrast3=fit0.C[3,1]^2/fit0.Ccov[3,3]
-fcontrast2=fit0.C[2,1]^2/fit0.Ccov[2,2]
-pf(fcontrast2,1,fit0$df.residual,lower.tail=FALSE)
-pf(fcontrast3,1,fit0$df.residual,lower.tail=FALSE)
-
-dim(fit$coefficients)
-fit$coefficients[1,]
-summary(fit0)
-
-str(fit2$contrasts)
-names(fit2)
-names(fit)
-dim(fit2$coefficients)
-fit$coefficients[1,]
-
-# leter etter pverdier og testobs
-summary(fit0)
-
-fit3$t[1,2]*sqrt(fit3$s2.post[1])*fit3$stdev.unscaled[1,2]
-fit0$coefficients[6]
-fit3$s2.prior[1]
-fit3$s2.post[1]
-
-plot(fit3$Amean,fit3$s2.prior)
-plot(fit3$Amean,sqrt(fit3$s2.post),pch=".")
-lines(lowess(fit3$Amean,sqrt(fit3$s2.post)),col=2)
-
-names(fit3)
-dim(fit3$p.value)
-fit3$p.value[1,]
-fit3$stdev.unscaled[1,]
-fit3$sigma[1]
-fit3$Amean[1]
-
-str(v)
-hj=getEAWP(v)
-
-
-#lmFit(logCPM, design, block = pas_info$sampleid, correlation = corfit$consensus)
-# lmFit
-function (object, design = NULL, ndups = NULL, spacing = NULL, 
-          block = NULL, correlation, weights = NULL, method = "ls", 
-          ...) 
-{
-  y <- getEAWP(object)
-  design <- as.matrix(design)
-  
-  ne <- nonEstimable(design)
-  ndups <- 1
-  spacing <- 1
-  
-  method <- match.arg(method, c("ls", "robust"))
-  
-  fit <- gls.series(y$exprs, design = design, ndups = ndups, 
-                      spacing = spacing, block = block, correlation = correlation, 
-                      weights = weights, ...)
-  
-    n <- rowSums(is.na(fit$coefficients))
-    n <- sum(n > 0 & n < NCOL(fit$coefficients))
-
-  fit$genes <- y$probes
-  fit$Amean <- y$Amean
-  fit$method <- method
-  fit$design <- design
-  new("MArrayLM", fit)
-}
-
-
-#gls.series(getEAWP(logCPM)$exprs, design = design, ndups = 1, 
-#spacing = 1, block = pas_info$sampleid, correlation = corfit$consensus, 
-#weights = NULL, ...)
-#gls.series
-function (M, design = NULL, ndups = 2, spacing = 1, block = NULL, 
-          correlation = NULL, weights = NULL, ...) 
-{
-  M <- as.matrix(M)
-  ngenes <- nrow(M)
-  narrays <- ncol(M)
-  design <- as.matrix(design)
-  nbeta <- ncol(design)
-  coef.names <- colnames(design)
-
-  ndups <- spacing <- 1
-  block <- as.vector(block)
-
-  ub <- unique(block)
-  nblocks <- length(ub)
-  Z <- matrix(block, narrays, nblocks) == matrix(ub, narrays, 
-                                                 nblocks, byrow = TRUE)
-  cormatrix <- Z %*% (correlation * t(Z))
-    
-  diag(cormatrix) <- 1
-  stdev.unscaled <- matrix(NA, ngenes, nbeta, dimnames = list(rownames(M), 
-                                                              coef.names))
-  NoProbeWts <- all(is.finite(M)) && (is.null(weights) || !is.null(attr(weights, 
-                                                                        "arrayweights")))
-  V <- cormatrix
-
-  cholV <- chol(V)
-  y <- backsolve(cholV, t(M), transpose = TRUE)
-  dimnames(y) <- rev(dimnames(M))
-  X <- backsolve(cholV, design, transpose = TRUE)
-  dimnames(X) <- dimnames(design)
-  fit <- lm.fit(X, y)
-  if (fit$df.residual > 0) {
-    if (is.matrix(fit$effects)) 
-      fit$sigma <- sqrt(colMeans(fit$effects[-(1:fit$rank), 
-                                             , drop = FALSE]^2))
-    else fit$sigma <- sqrt(mean(fit$effects[-(1:fit$rank)]^2))
-  }
-  else fit$sigma <- rep_len(NA_real_, ngenes)
-  fit$fitted.values <- fit$residuals <- fit$effects <- NULL
-  fit$coefficients <- t(fit$coefficients)
-  fit$cov.coefficients <- chol2inv(fit$qr$qr, size = fit$qr$rank)
-  est <- fit$qr$pivot[1:fit$qr$rank]
-  dimnames(fit$cov.coefficients) <- list(coef.names[est], 
-                                         coef.names[est])
-  stdev.unscaled[, est] <- matrix(sqrt(diag(fit$cov.coefficients)), 
-                                  ngenes, fit$qr$rank, byrow = TRUE)
-  fit$stdev.unscaled <- stdev.unscaled
-  fit$df.residual <- rep_len(fit$df.residual, length.out = ngenes)
-  dimnames(fit$stdev.unscaled) <- dimnames(fit$stdev.unscaled) <- dimnames(fit$coefficients)
-  fit$pivot <- fit$qr$pivot
-  fit$ndups <- ndups
-  fit$spacing <- spacing
-  fit$block <- block
-  fit$correlation <- correlation
-  return(fit)
-}
-
-
-
-#corfit = duplicateCorrelation(logCPM, design, block = pas_info$sampleid)
-#duplicate correlation
-function (object, design = NULL, ndups = 2L, spacing = 1L, block = NULL, 
-          trim = 0.15, weights = NULL) 
-{
-  y <- getEAWP(object)
-  M <- y$exprs
-  ngenes <- nrow(M)
-  narrays <- ncol(M)
-  design <- as.matrix(design)
-  nbeta <- ncol(design)
-  QR <- qr(design)
-  
-  MaxBlockSize <- max(table(block))
-  design.block <- model.matrix(~factor(block))
-  design.block <- design.block[, -1, drop = FALSE]
-  QtBlock <- qr.qty(QR, design.block)
-  
-  ndups <- 1L
-  nspacing <- 1L
-  Array <- block
-  
-  rho <- rep_len(NA_real_, ngenes)
-  nafun <- function(e) NA
-  for (i in 1:ngenes) {
-    y <- drop(M[i, ])
-    o <- is.finite(y)
-    A <- factor(Array[o])
-    nobs <- sum(o)
-    nblocks <- length(levels(A))
-    if (nobs > (nbeta + 2L) && nblocks > 1L && nblocks < 
-        (nobs - 1L)) {
-      y <- y[o]
-      X <- design[o, , drop = FALSE]
-      Z <- model.matrix(~0 + A)
-      if (!is.null(weights)) {
-        w <- drop(weights[i, ])[o]
-        s <- tryCatch(suppressWarnings(statmod::mixedModel2Fit(y, 
-                                                               X, Z, w, only.varcomp = TRUE, maxit = 20)$varcomp), 
-                      error = nafun)
-      }
-      else s <- tryCatch(suppressWarnings(statmod::mixedModel2Fit(y, 
-                                                                  X, Z, only.varcomp = TRUE, maxit = 20)$varcomp), 
-                         error = nafun)
-      if (!is.na(s[1])) 
-        rho[i] <- s[2]/sum(s)
-    }
-  }
-  rhomax <- 0.99
-  
-  rhomin <- 1/(1 - MaxBlockSize) + 0.01
-  
-  m <- min(rho, 0, na.rm = TRUE)
-  if (m < rhomin) 
-    rho[rho < rhomin] <- rhomin
-  m <- max(rho, 0, na.rm = TRUE)
-  if (m > rhomax) 
-    rho[rho > rhomax] <- rhomax
-  
-  arho <- atanh(rho)
-  mrho <- tanh(mean(arho, trim = trim, na.rm = TRUE))
-  list(consensus.correlation = mrho, cor = mrho, atanh.correlations = arho)
-}
+# cbind(pas_info$sampleid, colnames(count))
+# 
+# #finne konsepter fra data
+# 
+# summary(dge)
+# dge
+# dim(dge)
+# # 27672 110
+# dim(dge$counts)
+# dim(dge$samples)
+# dge$samples
+# 
+# 
+# fit0=lm(logCPM[1,]~design-1)
+# fit0_2 = lmer(logCPM[1,]~design-1 + (1 | pas_info$sampleid))
+# dim(fit0$coefficients)
+# dim(C)
+# fit0.C=C%*%matrix(fit0$coefficients,ncol=1)
+# fit0.C
+# fit0.Ccov=C%*%vcov(fit0)%*%t(C)
+# fit0.Ccov
+# fcontrast3=fit0.C[3,1]^2/fit0.Ccov[3,3]
+# fcontrast2=fit0.C[2,1]^2/fit0.Ccov[2,2]
+# pf(fcontrast2,1,fit0$df.residual,lower.tail=FALSE)
+# pf(fcontrast3,1,fit0$df.residual,lower.tail=FALSE)
+# 
+# dim(fit$coefficients)
+# fit$coefficients[1,]
+# summary(fit0)
+# 
+# str(fit2$contrasts)
+# names(fit2)
+# names(fit)
+# dim(fit2$coefficients)
+# fit$coefficients[1,]
+# 
+# # leter etter pverdier og testobs
+# summary(fit0)
+# 
+# fit3$t[1,2]*sqrt(fit3$s2.post[1])*fit3$stdev.unscaled[1,2]
+# fit0$coefficients[6]
+# fit3$s2.prior[1]
+# fit3$s2.post[1]
+# 
+# plot(fit3$Amean,fit3$s2.prior)
+# plot(fit3$Amean,sqrt(fit3$s2.post),pch=".")
+# lines(lowess(fit3$Amean,sqrt(fit3$s2.post)),col=2)
+# 
+# names(fit3)
+# dim(fit3$p.value)
+# fit3$p.value[1,]
+# fit3$stdev.unscaled[1,]
+# fit3$sigma[1]
+# fit3$Amean[1]
+# 
+# str(v)
+# hj=getEAWP(v)
+# 
+# 
+# #lmFit(logCPM, design, block = pas_info$sampleid, correlation = corfit$consensus)
+# # lmFit
+# function (object, design = NULL, ndups = NULL, spacing = NULL, 
+#           block = NULL, correlation, weights = NULL, method = "ls", 
+#           ...) 
+# {
+#   y <- getEAWP(object)
+#   design <- as.matrix(design)
+#   
+#   ne <- nonEstimable(design)
+#   ndups <- 1
+#   spacing <- 1
+#   
+#   method <- match.arg(method, c("ls", "robust"))
+#   
+#   fit <- gls.series(y$exprs, design = design, ndups = ndups, 
+#                       spacing = spacing, block = block, correlation = correlation, 
+#                       weights = weights, ...)
+#   
+#     n <- rowSums(is.na(fit$coefficients))
+#     n <- sum(n > 0 & n < NCOL(fit$coefficients))
+# 
+#   fit$genes <- y$probes
+#   fit$Amean <- y$Amean
+#   fit$method <- method
+#   fit$design <- design
+#   new("MArrayLM", fit)
+# }
+# 
+# 
+# #gls.series(getEAWP(logCPM)$exprs, design = design, ndups = 1, 
+# #spacing = 1, block = pas_info$sampleid, correlation = corfit$consensus, 
+# #weights = NULL, ...)
+# #gls.series
+# function (M, design = NULL, ndups = 2, spacing = 1, block = NULL, 
+#           correlation = NULL, weights = NULL, ...) 
+# {
+#   M <- as.matrix(M)
+#   ngenes <- nrow(M)
+#   narrays <- ncol(M)
+#   design <- as.matrix(design)
+#   nbeta <- ncol(design)
+#   coef.names <- colnames(design)
+# 
+#   ndups <- spacing <- 1
+#   block <- as.vector(block)
+# 
+#   ub <- unique(block)
+#   nblocks <- length(ub)
+#   Z <- matrix(block, narrays, nblocks) == matrix(ub, narrays, 
+#                                                  nblocks, byrow = TRUE)
+#   cormatrix <- Z %*% (correlation * t(Z))
+#     
+#   diag(cormatrix) <- 1
+#   stdev.unscaled <- matrix(NA, ngenes, nbeta, dimnames = list(rownames(M), 
+#                                                               coef.names))
+#   NoProbeWts <- all(is.finite(M)) && (is.null(weights) || !is.null(attr(weights, 
+#                                                                         "arrayweights")))
+#   V <- cormatrix
+# 
+#   cholV <- chol(V)
+#   y <- backsolve(cholV, t(M), transpose = TRUE)
+#   dimnames(y) <- rev(dimnames(M))
+#   X <- backsolve(cholV, design, transpose = TRUE)
+#   dimnames(X) <- dimnames(design)
+#   fit <- lm.fit(X, y)
+#   if (fit$df.residual > 0) {
+#     if (is.matrix(fit$effects)) 
+#       fit$sigma <- sqrt(colMeans(fit$effects[-(1:fit$rank), 
+#                                              , drop = FALSE]^2))
+#     else fit$sigma <- sqrt(mean(fit$effects[-(1:fit$rank)]^2))
+#   }
+#   else fit$sigma <- rep_len(NA_real_, ngenes)
+#   fit$fitted.values <- fit$residuals <- fit$effects <- NULL
+#   fit$coefficients <- t(fit$coefficients)
+#   fit$cov.coefficients <- chol2inv(fit$qr$qr, size = fit$qr$rank)
+#   est <- fit$qr$pivot[1:fit$qr$rank]
+#   dimnames(fit$cov.coefficients) <- list(coef.names[est], 
+#                                          coef.names[est])
+#   stdev.unscaled[, est] <- matrix(sqrt(diag(fit$cov.coefficients)), 
+#                                   ngenes, fit$qr$rank, byrow = TRUE)
+#   fit$stdev.unscaled <- stdev.unscaled
+#   fit$df.residual <- rep_len(fit$df.residual, length.out = ngenes)
+#   dimnames(fit$stdev.unscaled) <- dimnames(fit$stdev.unscaled) <- dimnames(fit$coefficients)
+#   fit$pivot <- fit$qr$pivot
+#   fit$ndups <- ndups
+#   fit$spacing <- spacing
+#   fit$block <- block
+#   fit$correlation <- correlation
+#   return(fit)
+# }
+# 
+# 
+# 
+# #corfit = duplicateCorrelation(logCPM, design, block = pas_info$sampleid)
+# #duplicate correlation
+# function (object, design = NULL, ndups = 2L, spacing = 1L, block = NULL, 
+#           trim = 0.15, weights = NULL) 
+# {
+#   y <- getEAWP(object)
+#   M <- y$exprs
+#   ngenes <- nrow(M)
+#   narrays <- ncol(M)
+#   design <- as.matrix(design)
+#   nbeta <- ncol(design)
+#   QR <- qr(design)
+#   
+#   MaxBlockSize <- max(table(block))
+#   design.block <- model.matrix(~factor(block))
+#   design.block <- design.block[, -1, drop = FALSE]
+#   QtBlock <- qr.qty(QR, design.block)
+#   
+#   ndups <- 1L
+#   nspacing <- 1L
+#   Array <- block
+#   
+#   rho <- rep_len(NA_real_, ngenes)
+#   nafun <- function(e) NA
+#   for (i in 1:ngenes) {
+#     y <- drop(M[i, ])
+#     o <- is.finite(y)
+#     A <- factor(Array[o])
+#     nobs <- sum(o)
+#     nblocks <- length(levels(A))
+#     if (nobs > (nbeta + 2L) && nblocks > 1L && nblocks < 
+#         (nobs - 1L)) {
+#       y <- y[o]
+#       X <- design[o, , drop = FALSE]
+#       Z <- model.matrix(~0 + A)
+#       if (!is.null(weights)) {
+#         w <- drop(weights[i, ])[o]
+#         s <- tryCatch(suppressWarnings(statmod::mixedModel2Fit(y, 
+#                                                                X, Z, w, only.varcomp = TRUE, maxit = 20)$varcomp), 
+#                       error = nafun)
+#       }
+#       else s <- tryCatch(suppressWarnings(statmod::mixedModel2Fit(y, 
+#                                                                   X, Z, only.varcomp = TRUE, maxit = 20)$varcomp), 
+#                          error = nafun)
+#       if (!is.na(s[1])) 
+#         rho[i] <- s[2]/sum(s)
+#     }
+#   }
+#   rhomax <- 0.99
+#   
+#   rhomin <- 1/(1 - MaxBlockSize) + 0.01
+#   
+#   m <- min(rho, 0, na.rm = TRUE)
+#   if (m < rhomin) 
+#     rho[rho < rhomin] <- rhomin
+#   m <- max(rho, 0, na.rm = TRUE)
+#   if (m > rhomax) 
+#     rho[rho > rhomax] <- rhomax
+#   
+#   arho <- atanh(rho)
+#   mrho <- tanh(mean(arho, trim = trim, na.rm = TRUE))
+#   list(consensus.correlation = mrho, cor = mrho, atanh.correlations = arho)
+# }
