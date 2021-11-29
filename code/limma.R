@@ -107,7 +107,7 @@ design = model.matrix(~ inflammation*tissue, data = pas_info)
 keep = filterByExpr(dge, design)
 dge = dge[keep, , keep.lib.sizes=FALSE]
 dim(dge$counts)
-# 27672, before 58003 
+# 27534, before 58003 
 #use TMM normalization method
 dge = calcNormFactors(dge)
 
@@ -174,11 +174,11 @@ dds = DESeqDataSetFromMatrix(countData = round(count), colData = pas_info, desig
 dds$tissue
 #pre processing
 length(dds[, 1])
-keep = filterByExpr(counts(dds), design)
-dds = dds[keep, ]
+keep_DESeq = filterByExpr(counts(dds), design)
+dds = dds[keep_DESeq, ]
 length(dds[, 1])
 #58003 vs 43358
-#vs 19668
+#vs 27708
 
 dds <- DESeq(dds)
 attributes(dds@modelMatrix)$dimnames[[2]]
@@ -212,7 +212,7 @@ contrast.complex = contrast.complex[order(contrast.complex$padj), ]
 ggplot(as(contrast.UI, "data.frame"), aes(x = pvalue)) + 
   geom_histogram(binwidth = 0.01, fill = "Blue", boundary = 0)
 
-DESeq2::plotMA(contrast.UI, ylim = c(-2, 2))
+DESeq2::plotMA(contrast.UI)
 
 ###########################################################################
 #analysis of results
@@ -256,7 +256,17 @@ venn.3 = list("limma" = rownames(topTable(fit3, number = number, coef = 2, p.val
             # "DESeq2" = rownames(contrast.complex[contrast.complex$padj < 0.05, ]))
 ggvenn(venn.3, show_percentage = FALSE)
 
+
+###########################################################################
+#Differences between limma and DESeq
+###########################################################################
+
+#pre processing
+ggvenn(list("limma" = names(keep), "DESeq" = names(keep_DESeq)), show_percentage = FALSE)
+
+###########################################################################
 #personal comments, code to quality check changes
+###########################################################################
 
 #double check if changes made above
 #unique(pas_info$diseaseinflammation[pas_info$tissue=="Ileum tissue"])
@@ -277,17 +287,9 @@ ggvenn(venn.3, show_percentage = FALSE)
 # #finds tables for comparing how much data we have for each group
 # table(pas_info$disease)
 # table(pas_info$inflammation)
-# table(pas_info$tissue,pas_info$inflammation,pas_info$disease)
+# table(pas_info$tissue,pas_info$inflammation)
 # 
-# #not perfect way to do this
-# n_occur = data.frame(table(id = pas_info$sampleid))
-# #this gives us levels
-# #ids with more than one sample
-# sum(n_occur$Freq > 1)
-# sum(n_occur$Freq == 2)
-# sum(n_occur$Freq == 3)
-# #ids with one sample
-# sum(n_occur$Freq == 1)
+# table(table(pas_info$sampleid))
 
 
 # cbind(pas_info$sampleid, colnames(count))
@@ -506,3 +508,13 @@ ggvenn(venn.3, show_percentage = FALSE)
 #   mrho <- tanh(mean(arho, trim = trim, na.rm = TRUE))
 #   list(consensus.correlation = mrho, cor = mrho, atanh.correlations = arho)
 # }
+ggplot() + 
+  geom_smooth(aes(x = fit3_alt$Amean, y = sqrt(fit3_alt$sigma)), method = "gam", formula = y ~ s(x, bs = "cs")) + 
+  geom_point(aes(x = fit3_alt$Amean, y = (fit3_alt$s2.prior)^(1/4)))
+
+#f is a measurement of how much of the data is relevant for each function value, just random guess so far
+curve = lowess(x = fit3_alt$Amean, y = sqrt(fit3_alt$sigma), f = 1/4)
+
+ggplot() + 
+  geom_point(aes(curve$x, curve$y), col = "red") + 
+  geom_point(aes(x = fit3$Amean, y = (fit3$s2.prior)^(1/4) ), col = "blue")
