@@ -3,6 +3,7 @@ library(ggvenn)
 library(edgeR)
 library(DESeq2)
 library(lme4)
+library(hexbin)
 
 #file location
 fileloc = "Z:/Atle van Beelen Granlund/"
@@ -66,12 +67,7 @@ pas_info$inflammation = rep("U", length(pas_info$diseaseinflammation))
 pas_info$inflammation[A] = "A"
 pas_info$inflammation[H] = "H"
 
-#remove diseaseinflamation (never run this twice!!!)
-# kanskje lurt å beholde den kolonnen?
-di=pas_info[,2]
-pas_info = pas_info[-2]
-
-# #finds tables for comparing how much data we have for each group
+# finds tables for comparing how much data we have for each group
 table(pas_info$disease)
 table(pas_info$inflammation)
 table(pas_info$tissue,pas_info$inflammation,pas_info$disease)
@@ -89,6 +85,11 @@ table(table(pas_info$sampleid)) # 13 med 2 og 1 med 3 prøver
 #change the names of count to the modified names from pas_info
 #observe that the count was sorted based on the names of pas_info before manipulation
 colnames(count) = pas_info$sampleid
+
+#change F to H in diseaseinflammation and make variables factors
+pas_info$diseaseinflammation[pas_info$diseaseinflammation == "F"] = "H"
+pas_info$diseaseinflammation = factor(pas_info$diseaseinflammation)
+pas_info$inflammation = factor(pas_info$inflammation)
 
 ###########################################################################
 #limma/voom (model)
@@ -117,8 +118,11 @@ dge = calcNormFactors(dge)
 
 #limma
 #"prior.count damp down the variances of logarithms of low counts"
-logCPM = cpm(dge, log=TRUE, prior.count=3)
+logCPM = cpm(dge, log=TRUE)
 dim(logCPM)
+
+#plotMDS
+plotMDS(logCPM, labels = substr(pas_info$tissue, 1, 1), col = as.numeric(pas_info$diseaseinflammation))
 
 C=rbind("(CU-CH)-(IU-IH)"=c(0,0,0,0,1,0),"(CA-CH)-(IA-IH)"=c(0,0,0,0,0,1),"(CA-CU)-(IA-IU)"=c(0,0,0,0,1,-1))
 
@@ -138,11 +142,15 @@ fit3_alt = eBayes(fit2_alt, trend = TRUE)
 table_fit3 = topTable(fit3, number = 10)
 table_fit3_alt = topTable(fit3_alt, number = 10)
 
+plotMD(fit3, coef = 3)
+plotSA(fit3)
+
 #voom
 v = voom(dge, design, plot=TRUE) 
-plotMDS(v)
+plotMDS(v, labels = substr(pas_info$tissue, 1, 1), col = as.numeric(pas_info$diseaseinflammation))
+legend("top", legend = levels(pas_info$diseaseinflammation), col = 1:3, pch = 15)
 
-res=duplicateCorrelation(v,design,block=pas_info$sampleid)
+res = duplicateCorrelation(v,design,block=pas_info$sampleid)
 
 vfit = lmFit(v, design, block = pas_info$sampleid, correlation = res$consensus)
 vfit_alt = lmFit(v, design)
@@ -212,7 +220,16 @@ contrast.complex = contrast.complex[order(contrast.complex$padj), ]
 ggplot(as(contrast.UI, "data.frame"), aes(x = pvalue)) + 
   geom_histogram(binwidth = 0.01, fill = "Blue", boundary = 0)
 
-DESeq2::plotMA(contrast.UI)
+DESeq2::plotMA(contrast.complex)
+#DESeq2::plotPCA(rlogTransformation(dds), intgroup = c("tissue", "diseaseinflammation"))
+#plots of potential interest
+ggplot() + geom_point(aes(estimateSizeFactorsForMatrix(count), colSums(count)))
+#observation 88 is the smallest
+sf = estimateSizeFactorsForMatrix(dds@assays@data$counts)
+ncounts = t(t(dds@assays@data$counts)/sf)
+ggplot() + geom_hex(aes(x = log(rowMeans(ncounts)), y = log(rowVars(ncounts)))) + 
+  coord_fixed() + theme(legend.position = "none") + geom_abline(slope = 1:2, color = c("forestgreen", "red"))
+#green is variance for Poisson, red is for gamma
 
 ###########################################################################
 #analysis of results
