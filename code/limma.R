@@ -15,10 +15,13 @@ fileloc = "Z:/Atle van Beelen Granlund/"
 
 # info about the samples to connect to disease, tissue, inflammation, pasid
 
-pas_info_tot <- read.delim(paste(fileloc,'sample_info.txt',sep=""),sep="\t", header = TRUE, row.names = 1)
-count_tot = read.delim(paste(fileloc, "quasi.gene.quant", sep = ""), sep = "\t", check.names = FALSE)
+pas_info_tot <- read.delim(paste(fileloc,'sample_info.txt',sep=""), 
+                           sep="\t", header = TRUE, row.names = 1)
+count_tot = read.delim(paste(fileloc, "quasi.gene.quant", sep = ""), 
+                       sep = "\t", check.names = FALSE)
 #remove data that is considered bad
-removal = c(which(pas_info_tot$Sample_ID == "3115i"), which(pas_info_tot$Sample_ID == "3073i_new"))
+removal = c(which(pas_info_tot$Sample_ID == "3115i"), 
+            which(pas_info_tot$Sample_ID == "3073i_new"))
 #this has been run twice for some reason
 removal = c(removal, which(pas_info_tot$Sample_ID == "3002i"))
 
@@ -49,7 +52,8 @@ pas_info$sampleid = firstpart
 #Assuming we follow tissue instead of inflammation
 #remove i from disease information, as it should be part of tissue as well
 i = grepl("*i", pas_info$diseaseinflammation)
-pas_info$diseaseinflammation[i] = substr(pas_info$diseaseinflammation[i], 1, nchar(pas_info$diseaseinflammation[i]) - 1)
+pas_info$diseaseinflammation[i] = substr(pas_info$diseaseinflammation[i], 1, 
+                                         nchar(pas_info$diseaseinflammation[i]) - 1)
 
 #more a double check than anything else
 #unique(pas_info$diseaseinflammation)
@@ -58,7 +62,8 @@ pas_info$diseaseinflammation[i] = substr(pas_info$diseaseinflammation[i], 1, nch
 #replaced F with H for "healthy"
 AU = grep("..[AU]", pas_info$diseaseinflammation)
 pas_info$disease = rep("H", length(pas_info$diseaseinflammation))
-pas_info$disease[AU] = substr(pas_info$diseaseinflammation[AU], 1, nchar(pas_info$diseaseinflammation[AU]) - 1)
+pas_info$disease[AU] = substr(pas_info$diseaseinflammation[AU], 1, 
+                              nchar(pas_info$diseaseinflammation[AU]) - 1)
 
 
 A = grep("A", pas_info$diseaseinflammation)
@@ -122,9 +127,12 @@ logCPM = cpm(dge, log=TRUE)
 dim(logCPM)
 
 #plotMDS
-plotMDS(logCPM, labels = substr(pas_info$tissue, 1, 1), col = as.numeric(pas_info$diseaseinflammation))
+plotMDS(logCPM, labels = substr(pas_info$tissue, 1, 1), 
+        col = as.numeric(pas_info$diseaseinflammation))
 
-C=rbind("(CU-CH)-(IU-IH)"=c(0,0,0,0,1,0),"(CA-CH)-(IA-IH)"=c(0,0,0,0,0,1),"(CA-CU)-(IA-IU)"=c(0,0,0,0,1,-1))
+C=rbind("(CU-CH)-(IU-IH)"=c(0,0,0,0,1,0), 
+        "(CA-CH)-(IA-IH)"=c(0,0,0,0,0,1),
+        "(CA-CU)-(IA-IU)"=c(0,0,0,0,1,-1))
 
 #implement correlation
 corfit = duplicateCorrelation(logCPM, design, block = pas_info$sampleid)
@@ -142,26 +150,20 @@ fit3_alt = eBayes(fit2_alt, trend = TRUE)
 table_fit3 = topTable(fit3, number = 10)
 table_fit3_alt = topTable(fit3_alt, number = 10)
 
-plotMD(fit3, coef = 3)
-plotSA(fit3)
+limma::plotMD(fit3, coef = 3)
+limma::plotSA(fit3, col = "green")
 
 #voom
 v = voom(dge, design, plot=TRUE) 
-plotMDS(v, labels = substr(pas_info$tissue, 1, 1), col = as.numeric(pas_info$diseaseinflammation))
+plotMDS(v, labels = substr(pas_info$tissue, 1, 1), 
+        col = as.numeric(pas_info$diseaseinflammation))
 legend("top", legend = levels(pas_info$diseaseinflammation), col = 1:3, pch = 15)
 
 res = duplicateCorrelation(v,design,block=pas_info$sampleid)
 
-vfit = lmFit(v, design, block = pas_info$sampleid, correlation = res$consensus)
-vfit_alt = lmFit(v, design)
+vfit = lmFit(v, design, block = pas_info$sampleid, correlation = res$consensus, weights = v$weights)
+vfit_alt = lmFit(v, design, weights = v$weights)
 # inne i v er både en ny respons og vekter inn i GLS
-
-vfit = eBayes(vfit)
-vfit_alt = eBayes(vfit_alt)
-topTable(vfit, coef=ncol(design))
-#alternative, gives slightly different results
-#vfit = treat(vfit, lfc=log2(1.2))
-#topTreat(vfit, coef=ncol(design))
 
 C = rbind("IU"=c(0,0,0,0,1,0), #(CU-CH)-(IU-IH)
           "IA"=c(0,0,0,0,0,1), #(CA-CH)-(IA-IH)
@@ -174,11 +176,14 @@ vfit2_alt = eBayes(vfit2_alt, trend = TRUE)
 table_vfit2 = topTable(vfit2, number = 10)
 table_vfit2_alt = topTable(vfit2_alt, number = 10)
 
+ggplot() + geom_histogram(aes(vfit2$p.value[, 3]), binwidth = 0.01, fill = "blue")
+
 ###########################################################################
 #deseq (model)
 ###########################################################################
 
-dds = DESeqDataSetFromMatrix(countData = round(count), colData = pas_info, design = ~ inflammation*tissue)
+dds = DESeqDataSetFromMatrix(countData = round(count), colData = pas_info, 
+                             design = ~ inflammation*tissue)
 dds$tissue
 #pre processing
 length(dds[, 1])
@@ -217,7 +222,7 @@ contrast.complex = contrast.complex[!is.na(contrast.complex$padj), ]
 contrast.complex = contrast.complex[order(contrast.complex$padj), ]
 
 #analyze data
-ggplot(as(contrast.UI, "data.frame"), aes(x = pvalue)) + 
+ggplot(as(contrast.complex, "data.frame"), aes(x = pvalue)) + 
   geom_histogram(binwidth = 0.01, fill = "Blue", boundary = 0)
 
 DESeq2::plotMA(contrast.complex)
@@ -228,7 +233,8 @@ ggplot() + geom_point(aes(estimateSizeFactorsForMatrix(count), colSums(count)))
 sf = estimateSizeFactorsForMatrix(dds@assays@data$counts)
 ncounts = t(t(dds@assays@data$counts)/sf)
 ggplot() + geom_hex(aes(x = log(rowMeans(ncounts)), y = log(rowVars(ncounts)))) + 
-  coord_fixed() + theme(legend.position = "none") + geom_abline(slope = 1:2, color = c("forestgreen", "red"))
+  coord_fixed() + theme(legend.position = "none") + 
+  geom_abline(slope = 1:2, color = c("forestgreen", "red"))
 #green is variance for Poisson, red is for gamma
 
 ###########################################################################
@@ -244,8 +250,10 @@ venn = list("limma" = rownames(table_fit3_alt),
 ggvenn(venn, show_percentage = FALSE)
 
 venn.p = list("limma" = rownames(topTable(fit3_alt, number = 10000, p.value = 0.05)),
-            "limma with correlation" = rownames(topTable(fit3, number = 10000, p.value = 0.05)), 
-            "voom with correlation" = rownames(topTable(vfit2, number = 10000, p.value = 0.05)),
+            "limma with correlation" = 
+              rownames(topTable(fit3, number = 10000, p.value = 0.05)), 
+            "voom with correlation" = 
+              rownames(topTable(vfit2, number = 10000, p.value = 0.05)),
             "voom" = rownames(topTable(vfit2_alt, number = 10000, p.value = 0.05)))
 ggvenn(venn.p, show_percentage = FALSE)
 
@@ -254,7 +262,7 @@ tail(topTable(vfit2_alt, number = 10000, p.value = 0.05))
 
 
 #check coef with DESeq2, only considering with correlation
-number = 10
+number = 1000000
 venn.1 = list("limma" = rownames(topTable(fit3, number = number, coef = 1, p.value = 0.05)), 
             "voom" = rownames(topTable(vfit2, number = number, coef = 1, p.value = 0.05)),
             "DESeq2" = rownames(contrast.UI[1:number, ]))
@@ -267,10 +275,10 @@ venn.2 = list("limma" = rownames(topTable(fit3, number = number, coef = 2, p.val
               # "DESeq2" = rownames(contrast.AI[contrast.AI$padj < 0.05, ]))
 ggvenn(venn.2, show_percentage = FALSE)
 
-venn.3 = list("limma" = rownames(topTable(fit3, number = number, coef = 2, p.value = 0.05)), 
-              "voom" = rownames(topTable(vfit2, number = number, coef = 2, p.value = 0.05)),
-              "DESeq2" = rownames(contrast.complex[1:number, ]))
-            # "DESeq2" = rownames(contrast.complex[contrast.complex$padj < 0.05, ]))
+venn.3 = list("limma" = rownames(topTable(fit3, number = number, coef = 3, p.value = 0.05)), 
+              "voom" = rownames(topTable(vfit2, number = number, coef = 3, p.value = 0.05)),
+              # "DESeq2" = rownames(contrast.complex[1:number, ]))
+            "DESeq2" = rownames(contrast.complex[contrast.complex$padj < 0.05, ]))
 ggvenn(venn.3, show_percentage = FALSE)
 
 
@@ -514,17 +522,131 @@ ggvenn(list("limma" = names(keep), "DESeq" = names(keep_DESeq)), show_percentage
 #   
 #   rhomin <- 1/(1 - MaxBlockSize) + 0.01
 #   
-#   m <- min(rho, 0, na.rm = TRUE)
-#   if (m < rhomin) 
-#     rho[rho < rhomin] <- rhomin
-#   m <- max(rho, 0, na.rm = TRUE)
-#   if (m > rhomax) 
-#     rho[rho > rhomax] <- rhomax
+# #   m <- min(rho, 0, na.rm = TRUE)
+# #   if (m < rhomin) 
+# #     rho[rho < rhomin] <- rhomin
+# #   m <- max(rho, 0, na.rm = TRUE)
+# #   if (m > rhomax) 
+# #     rho[rho > rhomax] <- rhomax
+# #   
+# #   arho <- atanh(rho)
+# #   mrho <- tanh(mean(arho, trim = trim, na.rm = TRUE))
+# #   list(consensus.correlation = mrho, cor = mrho, atanh.correlations = arho)
+# # }
+# 
+# lmFit(v, design, block = pas_info$sampleid, correlation = res$consensus, weights = v$weights)
+# function (object, design = NULL, ndups = NULL, spacing = NULL, 
+#           block = NULL, correlation, weights = NULL, method = "ls", 
+#           ...) 
+# {
+#   y <- getEAWP(object)
+#   design <- as.matrix(design)
+# 
+#   ne <- nonEstimable(design)
+# 
+#   ndups <- 1
+#   spacing <- 1
 #   
-#   arho <- atanh(rho)
-#   mrho <- tanh(mean(arho, trim = trim, na.rm = TRUE))
-#   list(consensus.correlation = mrho, cor = mrho, atanh.correlations = arho)
+#   method <- match.arg(method, c("ls", "robust"))
+# 
+#   fit <- gls.series(y$exprs, design = design, ndups = ndups, 
+#                       spacing = spacing, block = block, correlation = correlation, 
+#                       weights = weights, ...)
+# 
+#   if (NCOL(fit$coefficients) > 1) {
+#     n <- rowSums(is.na(fit$coefficients))
+#     n <- sum(n > 0 & n < NCOL(fit$coefficients))
+#     if (n > 0) 
+#       warning("Partial NA coefficients for ", n, 
+#               " probe(s)", call. = FALSE)
+#   }
+#   fit$genes <- y$probes
+#   fit$Amean <- y$Amean
+#   fit$method <- method
+#   fit$design <- design
+#   new("MArrayLM", fit)
 # }
+# 
+# gls.series
+# function (M, design = NULL, ndups = 2, spacing = 1, block = NULL, 
+#           correlation = NULL, weights = NULL, ...) 
+# {
+#   M <- as.matrix(M)
+#   ngenes <- nrow(M)
+#   narrays <- ncol(M)
+# 
+#   design <- as.matrix(design)
+# 
+#   nbeta <- ncol(design)
+#   coef.names <- colnames(design)
+# 
+#   if (!is.null(weights)) {
+#     weights[is.na(weights)] <- 0
+#     weights <- asMatrixWeights(weights, dim(M))
+#     M[weights < 1e-15] <- NA
+#     weights[weights < 1e-15] <- NA
+#   }
+# 
+#   ndups <- spacing <- 1
+#   block <- as.vector(block)
+# 
+#   ub <- unique(block)
+#   nblocks <- length(ub)
+#   Z <- matrix(block, narrays, nblocks) == matrix(ub, narrays, 
+#                                                  nblocks, byrow = TRUE)
+#   cormatrix <- Z %*% (correlation * t(Z))
+# 
+#   diag(cormatrix) <- 1
+#   stdev.unscaled <- matrix(NA, ngenes, nbeta, dimnames = list(rownames(M), 
+#                                                               coef.names))
+#   NoProbeWts <- all(is.finite(M)) && (is.null(weights) || !is.null(attr(weights, 
+#                                                                         "arrayweights")))
+#   beta <- stdev.unscaled
+#   sigma <- rep_len(NA_real_, ngenes)
+#   df.residual <- rep_len(0, ngenes)
+#   for (i in 1:ngenes) {
+#     y <- drop(M[i, ])
+#     o <- is.finite(y)
+#     y <- y[o]
+#     n <- length(y)
+#     if (n > 0) {
+#       X <- design[o, , drop = FALSE]
+#       V <- cormatrix[o, o]
+#       if (!is.null(weights)) {
+#         wrs <- 1/sqrt(drop(weights[i, o]))
+#         V <- wrs * t(wrs * t(V))
+#       }
+#       cholV <- chol(V)
+#       y <- backsolve(cholV, y, transpose = TRUE)
+#       if (all(X == 0)) {
+#         df.residual[i] <- n
+#         sigma[i] <- sqrt(array(1/n, c(1, n)) %*% y^2)
+#       }
+#       else {
+#         X <- backsolve(cholV, X, transpose = TRUE)
+#         out <- lm.fit(X, y)
+#         est <- !is.na(out$coefficients)
+#         beta[i, ] <- out$coefficients
+#         stdev.unscaled[i, est] <- sqrt(diag(chol2inv(out$qr$qr, 
+#                                                      size = out$rank)))
+#         df.residual[i] <- out$df.residual
+#         if (df.residual[i] > 0) 
+#           sigma[i] <- sqrt(array(1/out$df.residual, c(1, 
+#                                                       n)) %*% out$residuals^2)
+#       }
+#     }
+#   }
+#   cholV <- chol(cormatrix)
+#   QR <- qr(backsolve(cholV, design, transpose = TRUE))
+#   cov.coef <- chol2inv(QR$qr, size = QR$rank)
+#   est <- QR$pivot[1:QR$rank]
+#   dimnames(cov.coef) <- list(coef.names[est], coef.names[est])
+#   list(coefficients = beta, stdev.unscaled = stdev.unscaled, 
+#        sigma = sigma, df.residual = df.residual, ndups = ndups, 
+#        spacing = spacing, block = block, correlation = correlation, 
+#        cov.coefficients = cov.coef, pivot = QR$pivot, rank = QR$rank)
+# }
+
 ggplot() + 
   geom_smooth(aes(x = fit3_alt$Amean, y = sqrt(fit3_alt$sigma)), method = "gam", formula = y ~ s(x, bs = "cs")) + 
   geom_point(aes(x = fit3_alt$Amean, y = (fit3_alt$s2.prior)^(1/4)))
