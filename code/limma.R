@@ -96,6 +96,11 @@ pas_info$diseaseinflammation[pas_info$diseaseinflammation == "F"] = "H"
 pas_info$diseaseinflammation = factor(pas_info$diseaseinflammation)
 pas_info$inflammation = factor(pas_info$inflammation)
 
+#make as factors and order factors
+pas_info$inflammation = factor(pas_info$inflammation, c("H", "U", "A"))
+pas_info$tissue = factor(pas_info$tissue, c("Colon", "Ileum"))
+table(pas_info$inflammation,pas_info$tissue)
+
 ###########################################################################
 #limma/voom (model)
 ###########################################################################
@@ -104,10 +109,7 @@ pas_info$inflammation = factor(pas_info$inflammation)
 
 dge = DGEList(count)
 
-#make as factors and order factors
-pas_info$inflammation = factor(pas_info$inflammation, c("H", "U", "A"))
-pas_info$tissue = factor(pas_info$tissue, c("Colon", "Ileum"))
-table(pas_info$inflammation,pas_info$tissue)
+
 #"remove counts that have zero or very low counts"
 design = model.matrix(~ inflammation*tissue, data = pas_info)
 keep = filterByExpr(dge, design)
@@ -117,7 +119,8 @@ dim(dge$counts)
 #use TMM normalization method
 dge = calcNormFactors(dge)
 
-
+#check largest library size against smallest
+max(colSums(dge$counts))/min(colSums(dge$counts))
 
 #limma vs voom
 
@@ -144,8 +147,6 @@ fit2 = contrasts.fit(fit,t(C))
 
 fit3 = eBayes(fit2, trend=TRUE)
 
-table_fit3 = topTable(fit3, number = 10)
-
 #consensus correlation
 corfit$consensus.correlation
 #plots and tables
@@ -165,10 +166,6 @@ topTable(fit3, coef = 3, number = 20, p.value = 0.050)
 
 dge = DGEList(count)
 
-#make as factors and order factors
-pas_info$inflammation = factor(pas_info$inflammation, c("H", "U", "A"))
-pas_info$tissue = factor(pas_info$tissue, c("Colon", "Ileum"))
-table(pas_info$inflammation,pas_info$tissue)
 #"remove counts that have zero or very low counts"
 design = model.matrix(~ inflammation*tissue, data = pas_info)
 keep = filterByExpr(dge, design)
@@ -194,8 +191,6 @@ C=rbind("(IU-IH)-(CU-CH)"=c(0,0,0,0,1,0),
         "(IA-IU)-(CA-CU)"=c(0,0,0,0,-1,1))
 vfit2 = contrasts.fit(vfit, t(C))
 vfit2 = eBayes(vfit2, trend = FALSE)
-#for specific coef use coef = 1, 2 or 3, as contrast has three coefs
-table_vfit2 = topTable(vfit2, number = 10)
 
 # consensus correlation
 res$consensus.correlation
@@ -234,3 +229,6 @@ venn.3 = list("limma" = rownames(topTable(fit3, number = number, coef = 3, p.val
 ggvenn(venn.3, show_percentage = FALSE)
 
 
+ggplot() + 
+        geom_histogram(aes(res$atanh.correlations, fill = "voom"), binwidth = 0.02, alpha = 0.6) + 
+        geom_histogram(aes(corfit$atanh.correlations, fill = "limma"), binwidth = 0.02, alpha = 0.6)
