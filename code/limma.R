@@ -158,8 +158,8 @@ ggplot() + geom_histogram(aes(fit3$p.value[, 1]), binwidth = 0.01, fill = "blue"
 ggplot() + geom_histogram(aes(fit3$p.value[, 2]), binwidth = 0.01, fill = "blue")
 ggplot() + geom_histogram(aes(fit3$p.value[, 3]), binwidth = 0.01, fill = "blue")
 topTable(fit3, coef = 1, number = 20)
-topTable(fit3, coef = 2, number = 20, p.value = 0.050)
-topTable(fit3, coef = 3, number = 20, p.value = 0.050)
+topTable(fit3, coef = 2, number = 20)
+topTable(fit3, coef = 3, number = 20)
 
 
 #convert to relevant setup for voom
@@ -195,6 +195,7 @@ vfit2 = eBayes(vfit2, trend = FALSE)
 # consensus correlation
 res$consensus.correlation
 #plots and tables
+limma::plotSA(vfit2)
 limma::plotMD(vfit2, coef = 1)
 limma::plotMD(vfit2, coef = 2)
 limma::plotMD(vfit2, coef = 3)
@@ -202,8 +203,8 @@ ggplot() + geom_histogram(aes(vfit2$p.value[, 1]), binwidth = 0.01, fill = "blue
 ggplot() + geom_histogram(aes(vfit2$p.value[, 2]), binwidth = 0.01, fill = "blue")
 ggplot() + geom_histogram(aes(vfit2$p.value[, 3]), binwidth = 0.01, fill = "blue")
 topTable(vfit2, coef = 1, number = 20)
-topTable(vfit2, coef = 2, number = 20, p.value = 0.050)
-topTable(vfit2, coef = 3, number = 20, p.value = 0.050)
+topTable(vfit2, coef = 2, number = 20)
+topTable(vfit2, coef = 3, number = 20)
 
 
 ###########################################################################
@@ -211,7 +212,7 @@ topTable(vfit2, coef = 3, number = 20, p.value = 0.050)
 ###########################################################################
 
 
-#check coef with DESeq2, only considering with correlation
+#only considering with correlation
 number = 1000000
 venn.1 = list("limma" = rownames(topTable(fit3, number = number, coef = 1, p.value = 0.05)), 
               "voom" = rownames(topTable(vfit2, number = number, coef = 1, p.value = 0.05)))
@@ -228,7 +229,13 @@ venn.3 = list("limma" = rownames(topTable(fit3, number = number, coef = 3, p.val
 
 ggvenn(venn.3, show_percentage = FALSE)
 
-
+G = length(res$atanh.correlations)
+res$atanh.correlations = sort(res$atanh.correlations)
+corfit$atanh.correlations = sort(corfit$atanh.correlations)
 ggplot() + 
         geom_histogram(aes(res$atanh.correlations, fill = "voom"), binwidth = 0.02, alpha = 0.6) + 
-        geom_histogram(aes(corfit$atanh.correlations, fill = "limma"), binwidth = 0.02, alpha = 0.6)
+        geom_histogram(aes(corfit$atanh.correlations, fill = "limma"), binwidth = 0.02, alpha = 0.6) +
+        geom_vline(aes(xintercept = c(res$atanh.correlations[round(0.15*G)], 
+                                      res$atanh.correlations[round(0.85*G)]), col = "voom")) +
+        geom_vline(aes(xintercept = c(corfit$atanh.correlations[round(0.15*G)], 
+                                      corfit$atanh.correlations[round(0.85*G)]), col = "limma"))
