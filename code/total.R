@@ -7,7 +7,7 @@ library(hexbin)
 library(apeglm)
 
 #file location
-fileloc = "../Atle van Beelen Granlund/"
+fileloc = "Z:/Atle van Beelen Granlund/"
 
 
 ###########################################################################
