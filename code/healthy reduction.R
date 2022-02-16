@@ -16,7 +16,7 @@ fileloc = "../Atle van Beelen Granlund/"
 
 # info about the samples to connect to disease, tissue, inflammation, pasid
 
-pas_info_tot = read.delim(paste(fileloc,'sample_info.txt',sep=""), 
+pas_info_tot <- read.delim(paste(fileloc,'sample_info.txt',sep=""), 
                            sep="\t", header = TRUE, row.names = 1)
 count_tot = read.delim(paste(fileloc, "quasi.gene.quant", sep = ""), 
                        sep = "\t", check.names = FALSE)
@@ -102,11 +102,17 @@ table(table(pas_info$sampleid)) # 13 med 2 og 1 med 3 prøver
 #observe that the count was sorted based on the names of pas_info before manipulation
 colnames(count) = pas_info$sampleid
 
+# Remove H altogether for comparison
+count = count[, pas_info$disease != "H"]
+pas_info = pas_info[pas_info$disease != "H", ]
+
+
 #change F to H in diseaseinflammation and make variables factors
-pas_info$diseaseinflammation[pas_info$diseaseinflammation == "F"] = "H"
 pas_info$diseaseinflammation = factor(pas_info$diseaseinflammation)
 pas_info$inflammation = factor(pas_info$inflammation)
 pas_info$tissue = factor(pas_info$tissue)
+
+
 
 ###########################################################################
 #limma/voom (model)
@@ -117,7 +123,7 @@ pas_info$tissue = factor(pas_info$tissue)
 dge = DGEList(count)
 
 #make as factors and order factors
-pas_info$inflammation = factor(pas_info$inflammation, c("H", "U", "A"))
+pas_info$inflammation = factor(pas_info$inflammation, c("U", "A"))
 pas_info$tissue = factor(pas_info$tissue, c("Colon", "Ileum"))
 table(pas_info$inflammation,pas_info$tissue)
 #"remove counts that have zero or very low counts"
@@ -142,9 +148,7 @@ dim(logCPM)
 plotMDS(logCPM, labels = substr(pas_info$tissue, 1, 1), 
         col = as.numeric(pas_info$diseaseinflammation))
 
-C=rbind("(CU-CH)-(IU-IH)"=c(0,0,0,0,1,0), 
-        "(CA-CH)-(IA-IH)"=c(0,0,0,0,0,1),
-        "(CA-CU)-(IA-IU)"=c(0,0,0,0,1,-1))
+C=rbind("(CA-CU)-(IA-IU)"=c(0,0,0,1))
 
 #implement correlation
 corfit = duplicateCorrelation(logCPM, design, block = pas_info$sampleid)
@@ -162,7 +166,7 @@ fit3_alt = eBayes(fit2_alt, trend = TRUE)
 table_fit3 = topTable(fit3, number = 10)
 table_fit3_alt = topTable(fit3_alt, number = 10)
 
-limma::plotMD(fit3, coef = 3)
+limma::plotMD(fit3, coef = 1)
 limma::plotSA(fit3, col = "green")
 
 #voom
@@ -177,9 +181,6 @@ vfit = lmFit(v, design, block = pas_info$sampleid, correlation = voom_cor$consen
 vfit_alt = lmFit(v, design, weights = v$weights)
 # inne i v er både en ny respons og vekter inn i GLS
 
-C = rbind("IU"=c(0,0,0,0,1,0), #(CU-CH)-(IU-IH)
-          "IA"=c(0,0,0,0,0,1), #(CA-CH)-(IA-IH)
-          "IA minus IU"=c(0,0,0,0,-1,1)) #(CA-CU)-(IA-IU)
 vfit2 = contrasts.fit(vfit, t(C))
 vfit2_alt = contrasts.fit(vfit_alt, t(C))
 vfit2 = eBayes(vfit2, trend = FALSE)
@@ -188,7 +189,7 @@ vfit2_alt = eBayes(vfit2_alt, trend = FALSE)
 table_vfit2 = topTable(vfit2, number = 10)
 table_vfit2_alt = topTable(vfit2_alt, number = 10)
 
-ggplot() + geom_histogram(aes(vfit2$p.value[, 3]), binwidth = 0.01, fill = "blue")
+ggplot() + geom_histogram(aes(vfit2$p.value[, 1]), binwidth = 0.01, fill = "blue")
 
 ###########################################################################
 #deseq (model)
@@ -205,7 +206,7 @@ length(dds[, 1])
 #58003 vs 43358
 #vs 27708
 
-# equal to three part beneath
+# beneath
 # dds <- DESeq(dds)
 
 dds = estimateSizeFactors(dds)
@@ -224,26 +225,11 @@ removal.UI = contrast.UI[is.na(contrast.UI$padj), ]
 contrast.UI = contrast.UI[!is.na(contrast.UI$padj), ]
 contrast.UI = contrast.UI[order(contrast.UI$padj), ]
 
-contrast.AI <- results(dds, contrast = C[2, ])
-
-#for consideration
-removal.AI = contrast.AI[is.na(contrast.AI$padj), ]
-contrast.AI = contrast.AI[!is.na(contrast.AI$padj), ]
-contrast.AI = contrast.AI[order(contrast.AI$padj), ]
-
-
-contrast.complex <- results(dds, contrast = C[3, ])
-
-#for consideration
-removal.complex = contrast.complex[is.na(contrast.complex$padj), ]
-contrast.complex = contrast.complex[!is.na(contrast.complex$padj), ]
-contrast.complex = contrast.complex[order(contrast.complex$padj), ]
-
 #analyze data
-ggplot(as(contrast.complex, "data.frame"), aes(x = pvalue)) + 
+ggplot(as(contrast.UI, "data.frame"), aes(x = pvalue)) + 
   geom_histogram(binwidth = 0.01, fill = "Blue", boundary = 0)
 
-DESeq2::plotMA(contrast.complex)
+DESeq2::plotMA(contrast.UI)
 #DESeq2::plotPCA(rlogTransformation(dds), intgroup = c("tissue", "diseaseinflammation"))
 #plots of potential interest
 ggplot() + geom_point(aes(estimateSizeFactorsForMatrix(count), colSums(count)))
@@ -259,46 +245,17 @@ ggplot() + geom_hex(aes(x = log(rowMeans(ncounts)), y = log(rowVars(ncounts)))) 
 #analysis of results
 ###########################################################################
 
-#general venn diagram
-
-# venn = list("limma" = rownames(table_fit3_alt),
-#             "limma with correlation" = rownames(table_fit3), 
-#             "voom with correlation" = rownames(table_vfit2),
-#             "voom" = rownames(table_vfit2_alt))
-# ggvenn(venn, show_percentage = FALSE)
-# 
-# venn.p = list("limma" = rownames(topTable(fit3_alt, number = 10000, p.value = 0.05)),
-#             "limma with correlation" = 
-#               rownames(topTable(fit3, number = 10000, p.value = 0.05)), 
-#             "voom with correlation" = 
-#               rownames(topTable(vfit2, number = 10000, p.value = 0.05)),
-#             "voom" = rownames(topTable(vfit2_alt, number = 10000, p.value = 0.05)))
-# ggvenn(venn.p, show_percentage = FALSE)
-
 #double check that adj.P.val is used
-# tail(topTable(vfit2_alt, number = 10000, p.value = 0.05))
+tail(topTable(vfit2_alt, number = 10000, p.value = 0.05))
 
 
 #check coef with DESeq2, only considering with correlation
 number = 1000000
 venn.1 = list(#"limma" = rownames(topTable(fit3, number = number, coef = 1, p.value = 0.05)), 
-             "voom" = rownames(topTable(vfit2, number = number, coef = 1, p.value = 0.05)),
-            # "DESeq2" = rownames(contrast.UI[1:number, ]))
-            "DESeq2" = rownames(contrast.UI[contrast.UI$padj < 0.05, ]))
+               "voom" = rownames(topTable(vfit2, number = number, coef = 1, p.value = 0.05)),
+              # "DESeq2" = rownames(contrast.UI[1:number, ]))
+              "DESeq2" = rownames(contrast.UI[contrast.UI$padj < 0.05, ]))
 ggvenn(venn.1, show_percentage = FALSE)
-
-venn.2 = list("limma" = rownames(topTable(fit3, number = number, coef = 2, p.value = 0.05)), 
-              # "voom" = rownames(topTable(vfit2, number = number, coef = 2, p.value = 0.05)),
-              # "DESeq2" = rownames(contrast.AI[1:number, ]))
-              "DESeq2" = rownames(contrast.AI[contrast.AI$padj < 0.05, ]))
-ggvenn(venn.2, show_percentage = FALSE)
-
-venn.3 = list(# "limma" = rownames(topTable(fit3, number = number, coef = 3, p.value = 0.05)), 
-               "voom" = rownames(topTable(vfit2, number = number, coef = 3, p.value = 0.05)),
-              # "DESeq2" = rownames(contrast.complex[1:number, ]))
-            "DESeq2" = rownames(contrast.complex[contrast.complex$padj < 0.05, ]))
-ggvenn(venn.3, show_percentage = FALSE)
-
 
 ###########################################################################
 #Differences between limma and DESeq
@@ -423,7 +380,7 @@ keep_DESeq = filterByExpr(counts(dataSet), design)
 dataSet = dataSet[keep_DESeq, ]
 length(dataSet[, 1])
 #58003 vs 43358
-#vs 27708
+#vs 27708 (27581 after low count removal)
 
 
 #full, slow
@@ -531,22 +488,22 @@ number = 10000
 venn.limma = list("IU" = rownames(topTable(vfit2, number = number, coef = 1, p.value = 0.05)), 
                   "IA" = rownames(topTable(vfit2, number = number, coef = 2, p.value = 0.05)),
                   "IA - IU" = rownames(topTable(vfit2, number = number, coef = 3, p.value = 0.05))
-                  )
+)
 ggvenn(venn.limma, show_percentage = FALSE)
 
 venn.DESeq2 = list("IU" = rownames(contrast.UI[contrast.UI$padj < 0.05, ]),
                    "IA" = rownames(contrast.AI[contrast.AI$padj < 0.05, ]),
                    "IA - IU" = rownames(contrast.complex[contrast.complex$padj < 0.05, ])
-                   )
+)
 ggvenn(venn.DESeq2, show_percentage = FALSE)
 
 
 C.coef.DESeq2 = rbind("CH"=c(1,0,0,0,0,0), 
-        "CU"=c(1,0,1,0,0,0),
-        "CA"=c(1,0,0,1,0,0),
-        "IH"=c(1,1,0,0,0,0), 
-        "IU"=c(1,1,1,0,1,0),
-        "IA"=c(1,1,0,1,0,1))
+                      "CU"=c(1,0,1,0,0,0),
+                      "CA"=c(1,0,0,1,0,0),
+                      "IH"=c(1,1,0,0,0,0), 
+                      "IU"=c(1,1,1,0,1,0),
+                      "IA"=c(1,1,0,1,0,1))
 C.coef.voom = rbind("CH"=c(1,0,0,0,0,0), 
                     "CU"=c(1,1,0,0,0,0),
                     "CA"=c(1,0,1,0,0,0),
@@ -559,7 +516,7 @@ C.coef.names = factor(rownames(C.coef.DESeq2), levels = unique(rownames(C.coef.D
 y_DESeq2 = coef(dataSet[rownames(contrast.complex[1, ])])
 ggplot() + geom_point(aes(x = C.coef.names, y = C.coef.DESeq2 %*% t(y_DESeq2)))
 
-limma_baseline = eBayes(vfit, trend = FALSE)
+limma_baseline = eBayes(vfit, trend = TRUE)
 y_limma = coef(limma_baseline[rownames(contrast.complex[1, ]), ])
 ggplot() + geom_point(aes(x = C.coef.names, y = C.coef.voom %*% t(y_limma)))
 
@@ -567,17 +524,6 @@ ggplot() + geom_point(aes(x = C.coef.names, y = C.coef.voom %*% t(y_limma)))
 y_DESeq2 = coef(dataSet[rownames(topTable(vfit2, number = 1, coef = 3))])
 ggplot() + geom_point(aes(x = C.coef.names, y = C.coef.DESeq2 %*% t(y_DESeq2)))
 
-limma_baseline = eBayes(vfit, trend = FALSE)
+limma_baseline = eBayes(vfit, trend = TRUE)
 y_limma = coef(limma_baseline[rownames(topTable(vfit2, number = 1, coef = 3)), ])
 ggplot() + geom_point(aes(x = C.coef.names, y = C.coef.voom %*% t(y_limma)))
-
-# biomart, find gen
-library('biomaRt')
-
-mart <- useDataset("hsapiens_gene_ensembl", useMart("ensembl")) #Hent det humane datasettet fra biomaRt
-
-genes <- rownames(temp_limma) # df$genes #Her er ID’ene du har, og som du ønsker å oversette
-
-G_list <- getBM(filters= "ensembl_gene_id", attributes= c("ensembl_gene_id","hgnc_symbol"),values=genes,mart= mart)
-
-merge(df,G_list,by.x="gene",by.y="ensembl_gene_id") #Slå opp i biomaRt objekt for å hente ut gensymbol som tilsvarer ID.
