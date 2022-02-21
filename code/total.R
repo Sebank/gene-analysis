@@ -572,12 +572,33 @@ y_limma = coef(limma_baseline[rownames(topTable(vfit2, number = 1, coef = 3)), ]
 ggplot() + geom_point(aes(x = C.coef.names, y = C.coef.voom %*% t(y_limma)))
 
 # biomart, find gen
-library('biomaRt')
+# library('biomaRt')
+# 
+# mart <- useDataset("hsapiens_gene_ensembl", useMart("ensembl")) #Hent det humane datasettet fra biomaRt
+# 
+# genes <- rownames(temp_limma) # df$genes #Her er ID’ene du har, og som du ønsker å oversette
+# 
+# G_list <- getBM(filters= "ensembl_gene_id", attributes= c("ensembl_gene_id","hgnc_symbol"),values=genes,mart= mart)
+# 
+# merge(df,G_list,by.x="gene",by.y="ensembl_gene_id") #Slå opp i biomaRt objekt for å hente ut gensymbol som tilsvarer ID.
 
-mart <- useDataset("hsapiens_gene_ensembl", useMart("ensembl")) #Hent det humane datasettet fra biomaRt
+#messing with GLMM
+library(MASS)
+name = names(table(pas_info$sampleid))[ table(pas_info$sampleid) > 1]
+group = matrix(0, length(pas_info$sampleid), length(name))
+colnames(group) = name
 
-genes <- rownames(temp_limma) # df$genes #Her er ID’ene du har, og som du ønsker å oversette
+for(i in 1:length(name)){
+  group[which(pas_info$sampleid == name[i]), i] = 1
+}
 
-G_list <- getBM(filters= "ensembl_gene_id", attributes= c("ensembl_gene_id","hgnc_symbol"),values=genes,mart= mart)
+# 1/theta = dispersion
+dispersion = dataSet@rowRanges@elementMetadata@listData$dispersion
+genes = dataSet@assays@data@listData$counts
 
-merge(df,G_list,by.x="gene",by.y="ensembl_gene_id") #Slå opp i biomaRt objekt for å hente ut gensymbol som tilsvarer ID.
+# Problem as general intercept is calculated for all groups, think we only want for gruops with two observations
+glmer(
+  formula = genes[1, ] ~ -1 + design + (1|pas_info$sampleid), 
+  family = MASS::negative.binomial(link = "log", theta=1/dispersion[1]), 
+  offset = -log(dataSet@colData@listData$sizeFactor)
+  )
