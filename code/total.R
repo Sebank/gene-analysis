@@ -598,7 +598,13 @@ genes = dataSet@assays@data@listData$counts
 
 # Problem as general intercept is calculated for all groups, think we only want for gruops with two observations
 glmer(
-  formula = genes[1, ] ~ -1 + design + (1|pas_info$sampleid), 
-  family = MASS::negative.binomial(link = "log", theta=1/dispersion[1]), 
-  offset = -log(dataSet@colData@listData$sizeFactor)
+  formula = genes[2, ] ~ -1 + design + (1|pas_info$sampleid), 
+  family = MASS::negative.binomial(link = "log", theta=1/dispersion[2]), 
+  offset = log(dataSet@colData@listData$sizeFactor)
   )
+
+glm(
+  formula = genes[2, ] ~ -1 + design, 
+  family = MASS::negative.binomial(link = "log", theta=1/dispersion[2]), 
+  offset = log(dataSet@colData@listData$sizeFactor)
+)
