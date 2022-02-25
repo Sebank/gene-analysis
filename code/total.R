@@ -5,6 +5,7 @@ library(DESeq2)
 library(lme4)
 library(hexbin) 
 library(apeglm)
+library(readr)
 
 #file location
 fileloc = "Z:/Atle van Beelen Granlund/"
@@ -555,9 +556,16 @@ C.coef.voom = rbind("CH"=c(1,0,0,0,0,0),
                     "IA"=c(1,0,1,1,0,1))
 C.coef.names = factor(rownames(C.coef.DESeq2), levels = unique(rownames(C.coef.DESeq2)))
 
+#plot of all observations
+pas_info$comment = paste(substr(pas_info$tissue, 1, 1), pas_info$inflammation, sep = "")
+
 # "ENSG00000155380"
 y_DESeq2 = coef(dataSet[rownames(contrast.complex[1, ])])
-ggplot() + geom_point(aes(x = C.coef.names, y = C.coef.DESeq2 %*% t(y_DESeq2)))
+ggplot()  + 
+  geom_point(aes(x = factor(pas_info$comment, levels = c("CH", "CU", "CA", "IH", "IU", "IA")), y = unlist(count[rownames(contrast.complex[1, ]), ])), alpha = 0.3) + 
+  geom_point(aes(x = C.coef.names, y = 2^(C.coef.DESeq2 %*% t(y_DESeq2))), col = "red")
+#plot of all observations
+
 
 limma_baseline = eBayes(vfit, trend = FALSE)
 y_limma = coef(limma_baseline[rownames(contrast.complex[1, ]), ])
@@ -592,19 +600,68 @@ for(i in 1:length(name)){
   group[which(pas_info$sampleid == name[i]), i] = 1
 }
 
-# 1/theta = dispersion
+# dispersion = 1/theta 
 dispersion = dataSet@rowRanges@elementMetadata@listData$dispersion
 genes = dataSet@assays@data@listData$counts
 
-# Problem as general intercept is calculated for all groups, think we only want for gruops with two observations
-glmer(
-  formula = genes[2, ] ~ -1 + design + (1|pas_info$sampleid), 
-  family = MASS::negative.binomial(link = "log", theta=1/dispersion[2]), 
+# 1189 is first error
+i = 5
+GLMM = glmer(
+  formula = genes[i, ] ~ 1 + design[, -1] + (1|pas_info$sampleid), 
+  family = MASS::negative.binomial(link = "log", theta=1/dispersion[i]), 
   offset = log(dataSet@colData@listData$sizeFactor)
   )
+fisher = -GLMM@optinfo$derivs$Hessian
 
-glm(
-  formula = genes[2, ] ~ -1 + design, 
-  family = MASS::negative.binomial(link = "log", theta=1/dispersion[2]), 
+GLM = glm(
+  formula = genes[i, ] ~ -1 + design, 
+  family = MASS::negative.binomial(link = "log", theta=1/dispersion[i]), 
   offset = log(dataSet@colData@listData$sizeFactor)
 )
+
+contrast.UI[rownames(genes)[2], ]
+contrast.AI[rownames(genes)[2], ]
+
+n = length(rownames(genes))
+
+# create checkContrast (long so import instead)
+
+# checkContrast = data.frame("UI" = contrast.UI[rownames(genes), ][, 2], "UI.glmm" = rep(0, n), "UI.GLM" = rep(0, n), 
+#                            "AI" = contrast.AI[rownames(genes), ][, 2], "AI.glmm" = rep(0, n), "AI.GLM" = rep(0, n),
+#                            "mixed.sd" = rep(0, n))
+# rownames(checkContrast) = rownames(genes)
+# 
+# for(i in 26080:dim(genes)[1]){
+#   if(!is.na(checkContrast$UI[i]) & !is.na(checkContrast$AI[i])){
+#     try(expr = {temp = glmer(
+#             formula = genes[i, ] ~ -1 + design + (1|pas_info$sampleid), 
+#             family = MASS::negative.binomial(link = "log", theta=1/dispersion[i]), 
+#             offset = log(dataSet@colData@listData$sizeFactor)
+#             )
+#             checkContrast$UI.glmm[i] = temp@beta[5]*log2(exp(1))
+#             checkContrast$AI.glmm[i] = temp@beta[6]*log2(exp(1))
+#             checkContrast$mixed.sd[i] = temp@optinfo$val[1] }, silent = TRUE
+#     )
+# 
+#     
+#     try(expr = {temp = glm(
+#                 formula = genes[i, ] ~ -1 + design, 
+#                 family = MASS::negative.binomial(link = "log", theta=1/dispersion[i]), 
+#                 offset = log(dataSet@colData@listData$sizeFactor)
+#               )
+#       checkContrast$UI.GLM[i] = temp$coefficients[5]*log2(exp(1))
+#       checkContrast$AI.GLM[i] = temp$coefficients[6]*log2(exp(1))
+#     })
+#   }
+# }
+# 
+# write.csv(checkContrast, "D:\\Essential folders\\Documents\\RStudio\\master\\gene-analysis\\code\\checkContrast.csv")
+
+checkContrast = read.csv("D:\\Essential folders\\Documents\\RStudio\\master\\gene-analysis\\code\\checkContrast.csv", header = TRUE, row.names = 1)
+
+
+# main reference for source code https://rdrr.io/bioc/DESeq2/src/R/core.R (has links to function calls as well)
+# this is if only intercept
+mu = matrix( rowMeans(counts(dataSet, normalized = TRUE)) , ncol = 1)
+w = (mu^(-1) + dispersion)^(-1)
+betaSE = matrix( log2(exp(1))*(sqrt(rowSums(w)))^-1 )
