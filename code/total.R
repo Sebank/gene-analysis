@@ -560,23 +560,25 @@ C.coef.names = factor(rownames(C.coef.DESeq2), levels = unique(rownames(C.coef.D
 pas_info$comment = paste(substr(pas_info$tissue, 1, 1), pas_info$inflammation, sep = "")
 
 # "ENSG00000155380"
-y_DESeq2 = coef(dataSet[rownames(contrast.complex[1, ])])
+name = "ENSG00000280390" #rownames(contrast.complex[1, ])
+y_DESeq2 = coef(dataSet[name])
 ggplot()  + 
-  geom_point(aes(x = factor(pas_info$comment, levels = c("CH", "CU", "CA", "IH", "IU", "IA")), y = unlist(count[rownames(contrast.complex[1, ]), ])), alpha = 0.3) + 
+  geom_point(aes(x = factor(pas_info$comment, levels = c("CH", "CU", "CA", "IH", "IU", "IA")), y = unlist(count[name, ])), alpha = 0.3) + 
   geom_point(aes(x = C.coef.names, y = 2^(C.coef.DESeq2 %*% t(y_DESeq2))), col = "red")
 #plot of all observations
 
 
 limma_baseline = eBayes(vfit, trend = FALSE)
-y_limma = coef(limma_baseline[rownames(contrast.complex[1, ]), ])
+y_limma = coef(limma_baseline[name, ])
 ggplot() + geom_point(aes(x = C.coef.names, y = C.coef.voom %*% t(y_limma)))
 
 # "ENSG00000109099"
-y_DESeq2 = coef(dataSet[rownames(topTable(vfit2, number = 1, coef = 3))])
+name = rownames(topTable(vfit2, number = 1, coef = 3))
+y_DESeq2 = coef(dataSet[name])
 ggplot() + geom_point(aes(x = C.coef.names, y = C.coef.DESeq2 %*% t(y_DESeq2)))
 
 limma_baseline = eBayes(vfit, trend = FALSE)
-y_limma = coef(limma_baseline[rownames(topTable(vfit2, number = 1, coef = 3)), ])
+y_limma = coef(limma_baseline[name, ])
 ggplot() + geom_point(aes(x = C.coef.names, y = C.coef.voom %*% t(y_limma)))
 
 # biomart, find gen
@@ -631,42 +633,43 @@ checkContrast = data.frame("UI" = contrast.UI[rownames(genes), ][, 2], "UI.glmm"
                            "mixed.sd" = rep(0, n))
 rownames(checkContrast) = rownames(genes)
 
-for(i in 1:dim(genes)[1]){
-  if(!is.na(checkContrast$UI[i]) & !is.na(checkContrast$AI[i])){
-    try(expr = {temp = glmer(
-            formula = genes[i, ] ~ -1 + design + (1|pas_info$sampleid),
-            family = MASS::negative.binomial(link = "log", theta=1/dispersion[i]),
-            offset = log(dataSet@colData@listData$sizeFactor)
-            )
-            checkContrast$UI.glmm[i] = temp@beta[5]*log2(exp(1))
-            checkContrast$AI.glmm[i] = temp@beta[6]*log2(exp(1))
-            checkContrast$mixed.sd[i] = temp@optinfo$val[1] 
-        
-            beta = log2(exp(1))*temp@beta
-            mu_hat = design %*% beta
-            w_vec = mu_hat/(1.0 + dispersion[i] * mu_hat)
-            sigma = solve(t(design) %*% diag(array(w_vec)) %*% design)
-            
-            SE = log2(exp(1))*sqrt(pmax(diag(sigma), 0))
-            
-            P = 2 * pnorm(abs(beta/SE), lower.tail = FALSE)
-            
-            checkContrast$UI.P[i] = P[5]
-            checkContrast$AI.P[i] = P[5]
-            }, silent = TRUE
-    )
-
-
-    try(expr = {temp = glm(
-                formula = genes[i, ] ~ -1 + design,
-                family = MASS::negative.binomial(link = "log", theta=1/dispersion[i]),
-                offset = log(dataSet@colData@listData$sizeFactor)
-              )
-      checkContrast$UI.GLM[i] = temp$coefficients[5]*log2(exp(1))
-      checkContrast$AI.GLM[i] = temp$coefficients[6]*log2(exp(1))
-    })
-  }
-}
+# for(i in 1:dim(genes)[1]){
+#   if(!is.na(checkContrast$UI[i]) & !is.na(checkContrast$AI[i])){
+#     try(expr = {
+#             temp = glmer(
+#             formula = genes[i, ] ~ -1 + design + (1|pas_info$sampleid),
+#             family = MASS::negative.binomial(link = "log", theta=1/dispersion[i]),
+#             offset = log(dataSet@colData@listData$sizeFactor)
+#             )
+#             checkContrast$UI.glmm[i] = temp@beta[5]*log2(exp(1))
+#             checkContrast$AI.glmm[i] = temp@beta[6]*log2(exp(1))
+#             checkContrast$mixed.sd[i] = temp@optinfo$val[1] 
+#         
+#             beta = log2(exp(1))*temp@beta
+#             mu_hat = design %*% beta
+#             w_vec = mu_hat/(1.0 + dispersion[i] * mu_hat)
+#             sigma = solve(t(design) %*% diag(array(w_vec)) %*% design)
+#             
+#             SE = log2(exp(1))*sqrt(pmax(diag(sigma), 0))
+#             
+#             P = 2 * pnorm(abs(beta/SE), lower.tail = FALSE)
+#             
+#             checkContrast$UI.P[i] = P[5]
+#             checkContrast$AI.P[i] = P[6]
+#             }, silent = TRUE
+#     )
+# 
+# 
+#     try(expr = {temp = glm(
+#                 formula = genes[i, ] ~ -1 + design,
+#                 family = MASS::negative.binomial(link = "log", theta=1/dispersion[i]),
+#                 offset = log(dataSet@colData@listData$sizeFactor)
+#               )
+#       checkContrast$UI.GLM[i] = temp$coefficients[5]*log2(exp(1))
+#       checkContrast$AI.GLM[i] = temp$coefficients[6]*log2(exp(1))
+#     })
+#   }
+# }
 
 # write.csv(checkContrast, "D:\\Essential folders\\Documents\\RStudio\\master\\gene-analysis\\code\\checkContrast.csv")
 
@@ -691,18 +694,23 @@ betaSE = matrix( log2(exp(1))*(sqrt(rowSums(w)))^-1 )
 # sigma = (x.t() * (x.each_col() % w_vec) + ridge).i() * x.t() * (x.each_col() % w_vec) * (x.t() * (x.each_col() % w_vec) + ridge).i();
 #          beta_var_mat.row(i) = diagvec(sigma).t();
 
-i = 5
-GLMM = glmer(
-  formula = genes[i, ] ~ 1 + design[, -1] + (1|pas_info$sampleid), 
-  family = MASS::negative.binomial(link = "log", theta=1/dispersion[i]), 
-  offset = log(dataSet@colData@listData$sizeFactor)
-)
+# i = 5
+# GLMM = glmer(
+#   formula = genes[i, ] ~ 1 + design[, -1] + (1|pas_info$sampleid), 
+#   family = MASS::negative.binomial(link = "log", theta=1/dispersion[i]), 
+#   offset = log(dataSet@colData@listData$sizeFactor)
+# )
+# 
+# beta = GLMM@beta
+# mu_hat = design %*% GLMM@beta
+# w_vec = mu_hat/(1.0 + dispersion[i] * mu_hat)
+# sigma = solve(t(design) %*% diag(array(w_vec)) %*% design)
+# 
+# SE = log2(exp(1))*sqrt(pmax(diag(sigma), 0))
+# 
+# P = 2 * pnorm(abs(beta/SE), lower.tail = FALSE)
 
-beta = GLMM@beta
-mu_hat = design %*% GLMM@beta
-w_vec = mu_hat/(1.0 + dispersion[i] * mu_hat)
-sigma = solve(t(design) %*% diag(array(w_vec)) %*% design)
-
-SE = log2(exp(1))*sqrt(pmax(diag(sigma), 0))
-
-P = 2 * pnorm(abs(beta/SE), lower.tail = FALSE)
+#make comparable to contrast from DESeq2
+contrast.UI.glmm = data.frame("UI" = checkContrast$UI.glmm[checkContrast$UI.P != 0], "P" = checkContrast$UI.P[checkContrast$UI.P != 0])
+rownames(contrast.UI.glmm) = rownames(checkContrast[checkContrast$UI.P != 0, ])
+contrast.UI.glmm = contrast.UI.glmm[order(contrast.UI.glmm$P), ]
