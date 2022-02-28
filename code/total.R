@@ -430,7 +430,7 @@ length(dataSet[, 1])
 #full, slow
 dataSet = estimateSizeFactors(dataSet)
 dataSet = estimateDispersions(dataSet)
-dataSet = nbinomWaldTest(dataSet)
+dataSet = nbinomWaldTest(dataSet) # betaPrior = TRUE
 
 attributes(dataSet@modelMatrix)$dimnames[[2]]
 resultsNames(dataSet) # lists the coefficients
@@ -626,35 +626,48 @@ n = length(rownames(genes))
 
 # create checkContrast (long so import instead)
 
-# checkContrast = data.frame("UI" = contrast.UI[rownames(genes), ][, 2], "UI.glmm" = rep(0, n), "UI.GLM" = rep(0, n), 
-#                            "AI" = contrast.AI[rownames(genes), ][, 2], "AI.glmm" = rep(0, n), "AI.GLM" = rep(0, n),
-#                            "mixed.sd" = rep(0, n))
-# rownames(checkContrast) = rownames(genes)
-# 
-# for(i in 26080:dim(genes)[1]){
-#   if(!is.na(checkContrast$UI[i]) & !is.na(checkContrast$AI[i])){
-#     try(expr = {temp = glmer(
-#             formula = genes[i, ] ~ -1 + design + (1|pas_info$sampleid), 
-#             family = MASS::negative.binomial(link = "log", theta=1/dispersion[i]), 
-#             offset = log(dataSet@colData@listData$sizeFactor)
-#             )
-#             checkContrast$UI.glmm[i] = temp@beta[5]*log2(exp(1))
-#             checkContrast$AI.glmm[i] = temp@beta[6]*log2(exp(1))
-#             checkContrast$mixed.sd[i] = temp@optinfo$val[1] }, silent = TRUE
-#     )
-# 
-#     
-#     try(expr = {temp = glm(
-#                 formula = genes[i, ] ~ -1 + design, 
-#                 family = MASS::negative.binomial(link = "log", theta=1/dispersion[i]), 
-#                 offset = log(dataSet@colData@listData$sizeFactor)
-#               )
-#       checkContrast$UI.GLM[i] = temp$coefficients[5]*log2(exp(1))
-#       checkContrast$AI.GLM[i] = temp$coefficients[6]*log2(exp(1))
-#     })
-#   }
-# }
-# 
+checkContrast = data.frame("UI" = contrast.UI[rownames(genes), ][, 2], "UI.glmm" = rep(0, n), "UI.GLM" = rep(0, n), "UI.P" = rep(0, n),
+                           "AI" = contrast.AI[rownames(genes), ][, 2], "AI.glmm" = rep(0, n), "AI.GLM" = rep(0, n), "AI.P" = rep(0, n),
+                           "mixed.sd" = rep(0, n))
+rownames(checkContrast) = rownames(genes)
+
+for(i in 1:dim(genes)[1]){
+  if(!is.na(checkContrast$UI[i]) & !is.na(checkContrast$AI[i])){
+    try(expr = {temp = glmer(
+            formula = genes[i, ] ~ -1 + design + (1|pas_info$sampleid),
+            family = MASS::negative.binomial(link = "log", theta=1/dispersion[i]),
+            offset = log(dataSet@colData@listData$sizeFactor)
+            )
+            checkContrast$UI.glmm[i] = temp@beta[5]*log2(exp(1))
+            checkContrast$AI.glmm[i] = temp@beta[6]*log2(exp(1))
+            checkContrast$mixed.sd[i] = temp@optinfo$val[1] 
+        
+            beta = log2(exp(1))*temp@beta
+            mu_hat = design %*% beta
+            w_vec = mu_hat/(1.0 + dispersion[i] * mu_hat)
+            sigma = solve(t(design) %*% diag(array(w_vec)) %*% design)
+            
+            SE = log2(exp(1))*sqrt(pmax(diag(sigma), 0))
+            
+            P = 2 * pnorm(abs(beta/SE), lower.tail = FALSE)
+            
+            checkContrast$UI.P[i] = P[5]
+            checkContrast$AI.P[i] = P[5]
+            }, silent = TRUE
+    )
+
+
+    try(expr = {temp = glm(
+                formula = genes[i, ] ~ -1 + design,
+                family = MASS::negative.binomial(link = "log", theta=1/dispersion[i]),
+                offset = log(dataSet@colData@listData$sizeFactor)
+              )
+      checkContrast$UI.GLM[i] = temp$coefficients[5]*log2(exp(1))
+      checkContrast$AI.GLM[i] = temp$coefficients[6]*log2(exp(1))
+    })
+  }
+}
+
 # write.csv(checkContrast, "D:\\Essential folders\\Documents\\RStudio\\master\\gene-analysis\\code\\checkContrast.csv")
 
 checkContrast = read.csv("D:\\Essential folders\\Documents\\RStudio\\master\\gene-analysis\\code\\checkContrast.csv", header = TRUE, row.names = 1)
@@ -665,3 +678,31 @@ checkContrast = read.csv("D:\\Essential folders\\Documents\\RStudio\\master\\gen
 mu = matrix( rowMeans(counts(dataSet, normalized = TRUE)) , ncol = 1)
 w = (mu^(-1) + dispersion)^(-1)
 betaSE = matrix( log2(exp(1))*(sqrt(rowSums(w)))^-1 )
+
+
+# ridge = diagmat(lambda);
+# solve(beta_hat, x.t() * (x.each_col() % w_vec) + ridge, x.t() * (z % w_vec));
+# mu_hat = nfrow % exp(x * beta_hat);
+# for (int j = 0; j < y_m; j++) {
+#   mu_hat(j) = fmax(mu_hat(j), minmu);
+# }
+# 
+# w_vec = mu_hat/(1.0 + alpha_hat(i) * mu_hat);
+# sigma = (x.t() * (x.each_col() % w_vec) + ridge).i() * x.t() * (x.each_col() % w_vec) * (x.t() * (x.each_col() % w_vec) + ridge).i();
+#          beta_var_mat.row(i) = diagvec(sigma).t();
+
+i = 5
+GLMM = glmer(
+  formula = genes[i, ] ~ 1 + design[, -1] + (1|pas_info$sampleid), 
+  family = MASS::negative.binomial(link = "log", theta=1/dispersion[i]), 
+  offset = log(dataSet@colData@listData$sizeFactor)
+)
+
+beta = GLMM@beta
+mu_hat = design %*% GLMM@beta
+w_vec = mu_hat/(1.0 + dispersion[i] * mu_hat)
+sigma = solve(t(design) %*% diag(array(w_vec)) %*% design)
+
+SE = log2(exp(1))*sqrt(pmax(diag(sigma), 0))
+
+P = 2 * pnorm(abs(beta/SE), lower.tail = FALSE)
