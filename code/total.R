@@ -123,7 +123,7 @@ pas_info$tissue = factor(pas_info$tissue, c("Colon", "Ileum"))
 table(pas_info$inflammation,pas_info$tissue)
 #"remove counts that have zero or very low counts"
 design = model.matrix(~ inflammation*tissue, data = pas_info)
-keep = filterByExpr(dge, design)
+keep = filterByExpr(round(count), design)
 dge = dge[keep, , keep.lib.sizes=FALSE]
 dim(dge$counts)
 # 27534, before 58003 
@@ -244,7 +244,7 @@ contrast.complex = contrast.complex[order(contrast.complex$padj), ]
 ggplot(as(contrast.complex, "data.frame"), aes(x = pvalue)) + 
   geom_histogram(binwidth = 0.01, fill = "Blue", boundary = 0)
 
-DESeq2::plotMA(contrast.complex)
+DESeq2::plotMA(contrast.complex, ylim = c(-10, 10))
 #DESeq2::plotPCA(rlogTransformation(dds), intgroup = c("tissue", "diseaseinflammation"))
 #plots of potential interest
 ggplot() + geom_point(aes(estimateSizeFactorsForMatrix(count), colSums(count)))
@@ -443,7 +443,7 @@ res[order(res$padj), ] %>% head()
 ggplot(as(res, "data.frame"), aes(x = pvalue)) +
   geom_histogram(binwidth = 0.01, fill = "Royalblue", boundary = 0)
 
-DESeq2::plotMA(dataSet)
+DESeq2::plotMA(res, ylim = c(-10, 10))
 
 # # # Slow
 # pas_rlog = rlogTransformation(dataSet)
@@ -710,7 +710,20 @@ betaSE = matrix( log2(exp(1))*(sqrt(rowSums(w)))^-1 )
 # 
 # P = 2 * pnorm(abs(beta/SE), lower.tail = FALSE)
 
+# messing with w_vec to get estimate of variance is the same as extracting vcov from GLMM or GLM object
+# Does this imply that extracting the covariance of the assumed normal vcov is the same as using complex negbin?
+# beware of difference between exponential (normal R pipeline) and 2 base, hopefully we can convert at the end. 
+# I do not see an easy conversion for log normal with base of 2 instead of e
+
 #make comparable to contrast from DESeq2
 contrast.UI.glmm = data.frame("UI" = checkContrast$UI.glmm[checkContrast$UI.P != 0], "P" = checkContrast$UI.P[checkContrast$UI.P != 0])
 rownames(contrast.UI.glmm) = rownames(checkContrast[checkContrast$UI.P != 0, ])
 contrast.UI.glmm = contrast.UI.glmm[order(contrast.UI.glmm$P), ]
+
+# checking vcov against correlation of mixed effects
+# correlation matrix
+vcov(GLM) / t(t(sqrt(diag(vcov(GLM))))) %*% t(sqrt(diag(vcov(GLM))))
+vcov(GLMM) / t(t(sqrt(diag(vcov(GLMM))))) %*% t(sqrt(diag(vcov(GLMM))))
+
+# correlation of mixed effects 
+summary(GLMM)
