@@ -674,6 +674,7 @@ rownames(checkContrast) = rownames(genes)
 # write.csv(checkContrast, "D:\\Essential folders\\Documents\\RStudio\\master\\gene-analysis\\code\\checkContrast.csv")
 
 checkContrast = read.csv("D:\\Essential folders\\Documents\\RStudio\\master\\gene-analysis\\code\\checkContrast.csv", header = TRUE, row.names = 1)
+checkContrast = checkContrast[order(checkContrast$mixed.sd, decreasing = TRUE), ]
 
 
 # main reference for source code https://rdrr.io/bioc/DESeq2/src/R/core.R (has links to function calls as well)
@@ -701,17 +702,18 @@ betaSE = matrix( log2(exp(1))*(sqrt(rowSums(w)))^-1 )
 #   offset = log(dataSet@colData@listData$sizeFactor)
 # )
 # 
-# beta = GLMM@beta
+
 # mu_hat = design %*% GLMM@beta
 # w_vec = mu_hat/(1.0 + dispersion[i] * mu_hat)
 # sigma = solve(t(design) %*% diag(array(w_vec)) %*% design)
 # 
 # SE = log2(exp(1))*sqrt(pmax(diag(sigma), 0))
 # 
-# P = 2 * pnorm(abs(beta/SE), lower.tail = FALSE)
+# P = 2 * pnorm(abs(GLMM@beta/SE), lower.tail = FALSE)
 
 # messing with w_vec to get estimate of variance is the same as extracting vcov from GLMM or GLM object
 # Does this imply that extracting the covariance of the assumed normal vcov is the same as using complex negbin?
+# X^T W X is equal to vcov?
 # beware of difference between exponential (normal R pipeline) and 2 base, hopefully we can convert at the end. 
 # I do not see an easy conversion for log normal with base of 2 instead of e
 
@@ -727,3 +729,46 @@ vcov(GLMM) / t(t(sqrt(diag(vcov(GLMM))))) %*% t(sqrt(diag(vcov(GLMM))))
 
 # correlation of mixed effects 
 summary(GLMM)
+
+mu_hat = design %*% GLMM@beta
+W = diag(as.vector(mu_hat/(1.0 + dispersion[i] * mu_hat)))
+
+for(i in 1:dim(group)[2]){
+  print(paste(pas_info$inflammation[which(group[, i] == 1)], pas_info$tissue[which(group[, i] == 1)]))
+}
+
+
+# i is used way too much, so need to initialize this above correlation to make sure it has the right value
+i = 5
+GLMM = glmer(
+  formula = genes[i, ] ~ 1 + design[, -1] + (1|pas_info$sampleid), 
+  family = MASS::negative.binomial(link = "log", theta=1/dispersion[i]), 
+  offset = log(dataSet@colData@listData$sizeFactor)
+)
+
+GLM = glm(
+  formula = genes[i, ] ~ -1 + design, 
+  family = MASS::negative.binomial(link = "log", theta=1/dispersion[i]), 
+  offset = log(dataSet@colData@listData$sizeFactor)
+)
+# find all covariances for a specific gene
+cova = vector(mode = "double", length = dim(group)[2])
+corre = vector(mode = "double", length = dim(group)[2])
+for(l in 1:dim(group)[2]){
+  j = which(group[, l] == 1)[1]
+  k = which(group[, l] == 1)[2]
+  
+  x_j = design[j, ]
+  x_k = design[k, ]
+  mu_cov = (x_j + x_k) %*% GLMM@beta
+  se = GLMM@pp$theta
+  off = log(dataSet@colData@listData$sizeFactor)[c(j, k)]
+  cova[l] = exp(sum(off) + mu_cov + se^2)*(exp(se^2) - 1)
+  
+  corre[l] = cova[l]/sqrt(exp(off[1] + x_j %*% GLMM@beta + se^2/2) + # poisson part
+                            dispersion[i]*exp(2*off[1] + 2*x_j %*% GLMM@beta + 2*se^2) + # negative binomial part
+                            exp(2*off[1] + 2*x_j %*% GLMM@beta + se^2)*(exp(se^2) - 1)) # mixed effect part
+  corre[l] = corre[l]/sqrt(exp(off[2] + x_k %*% GLMM@beta + se^2/2) + # poisson part
+                            dispersion[i]*exp(2*off[2] + 2*x_k %*% GLMM@beta + 2*se^2) + # negative binomial part
+                            exp(2*off[2] + 2*x_k %*% GLMM@beta + se^2)*(exp(se^2) - 1)) # mixed effect part
+}
