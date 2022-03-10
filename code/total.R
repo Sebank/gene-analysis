@@ -628,11 +628,12 @@ n = length(rownames(genes))
 
 # create checkContrast (long so import instead)
 
-checkContrast = data.frame("UI" = contrast.UI[rownames(genes), ][, 2], "UI.glmm" = rep(0, n), "UI.GLM" = rep(0, n), "UI.P" = rep(0, n),
-                           "AI" = contrast.AI[rownames(genes), ][, 2], "AI.glmm" = rep(0, n), "AI.GLM" = rep(0, n), "AI.P" = rep(0, n),
-                           "mixed.sd" = rep(0, n))
-rownames(checkContrast) = rownames(genes)
-
+# checkContrast = data.frame("UI" = contrast.UI[rownames(genes), ][, 2], "UI.glmm" = rep(0, n), "UI.GLM" = rep(0, n), "UI.P" = rep(0, n),
+#                            "AI" = contrast.AI[rownames(genes), ][, 2], "AI.glmm" = rep(0, n), "AI.GLM" = rep(0, n), "AI.P" = rep(0, n),
+#                            "mixed.sd" = rep(0, n))
+# rownames(checkContrast) = rownames(genes)
+# cova = vector(mode = "double", length = dim(group)[2])
+# corre = matrix(nrow = n, ncol = dim(group)[2])
 # for(i in 1:dim(genes)[1]){
 #   if(!is.na(checkContrast$UI[i]) & !is.na(checkContrast$AI[i])){
 #     try(expr = {
@@ -643,20 +644,39 @@ rownames(checkContrast) = rownames(genes)
 #             )
 #             checkContrast$UI.glmm[i] = temp@beta[5]*log2(exp(1))
 #             checkContrast$AI.glmm[i] = temp@beta[6]*log2(exp(1))
-#             checkContrast$mixed.sd[i] = temp@optinfo$val[1] 
-#         
+#             checkContrast$mixed.sd[i] = temp@optinfo$val[1]
+# 
 #             beta = log2(exp(1))*temp@beta
 #             mu_hat = design %*% beta
 #             w_vec = mu_hat/(1.0 + dispersion[i] * mu_hat)
 #             sigma = solve(t(design) %*% diag(array(w_vec)) %*% design)
-#             
+# 
 #             SE = log2(exp(1))*sqrt(pmax(diag(sigma), 0))
-#             
+# 
 #             P = 2 * pnorm(abs(beta/SE), lower.tail = FALSE)
-#             
+# 
 #             checkContrast$UI.P[i] = P[5]
 #             checkContrast$AI.P[i] = P[6]
-#             }, silent = TRUE
+#             
+#             for(l in 1:dim(group)[2]){
+#               j = which(group[, l] == 1)[1]
+#               k = which(group[, l] == 1)[2]
+#               
+#               x_j = design[j, ]
+#               x_k = design[k, ]
+#               mu_cov = (x_j + x_k) %*% temp@beta
+#               se = temp@pp$theta
+#               off = log(dataSet@colData@listData$sizeFactor)[c(j, k)]
+#               cova[l] = exp(sum(off) + mu_cov + se^2)*(exp(se^2) - 1)
+#               
+#               corre[i, l] = cova[l]/sqrt(exp(off[1] + x_j %*% temp@beta + se^2/2) + # poisson part
+#                                         dispersion[i]*exp(2*off[1] + 2*x_j %*% temp@beta + 2*se^2) + # negative binomial part
+#                                         exp(2*off[1] + 2*x_j %*% temp@beta + se^2)*(exp(se^2) - 1)) # mixed effect part
+#               corre[i, l] = corre[i, l]/sqrt(exp(off[2] + x_k %*% temp@beta + se^2/2) + # poisson part
+#                                          dispersion[i]*exp(2*off[2] + 2*x_k %*% temp@beta + 2*se^2) + # negative binomial part
+#                                          exp(2*off[2] + 2*x_k %*% temp@beta + se^2)*(exp(se^2) - 1)) # mixed effect part
+#             }
+#         }, silent = TRUE
 #     )
 # 
 # 
@@ -672,9 +692,11 @@ rownames(checkContrast) = rownames(genes)
 # }
 
 # write.csv(checkContrast, "D:\\Essential folders\\Documents\\RStudio\\master\\gene-analysis\\code\\checkContrast.csv")
+# write.csv(corre, "D:\\Essential folders\\Documents\\RStudio\\master\\gene-analysis\\code\\corre.csv")
 
+corre = read.csv("D:\\Essential folders\\Documents\\RStudio\\master\\gene-analysis\\code\\corre.csv", header = TRUE, row.names = 1)
 checkContrast = read.csv("D:\\Essential folders\\Documents\\RStudio\\master\\gene-analysis\\code\\checkContrast.csv", header = TRUE, row.names = 1)
-checkContrast = checkContrast[order(checkContrast$mixed.sd, decreasing = TRUE), ]
+# checkContrast = checkContrast[order(checkContrast$mixed.sd, decreasing = TRUE), ]
 
 
 # main reference for source code https://rdrr.io/bioc/DESeq2/src/R/core.R (has links to function calls as well)
@@ -739,36 +761,43 @@ for(i in 1:dim(group)[2]){
 
 
 # i is used way too much, so need to initialize this above correlation to make sure it has the right value
-i = 5
-GLMM = glmer(
-  formula = genes[i, ] ~ 1 + design[, -1] + (1|pas_info$sampleid), 
-  family = MASS::negative.binomial(link = "log", theta=1/dispersion[i]), 
-  offset = log(dataSet@colData@listData$sizeFactor)
-)
+# i = 5
+# GLMM = glmer(
+#   formula = genes[i, ] ~ 1 + design[, -1] + (1|pas_info$sampleid), 
+#   family = MASS::negative.binomial(link = "log", theta=1/dispersion[i]), 
+#   offset = log(dataSet@colData@listData$sizeFactor)
+# )
+# 
+# GLM = glm(
+#   formula = genes[i, ] ~ -1 + design, 
+#   family = MASS::negative.binomial(link = "log", theta=1/dispersion[i]), 
+#   offset = log(dataSet@colData@listData$sizeFactor)
+# )
 
-GLM = glm(
-  formula = genes[i, ] ~ -1 + design, 
-  family = MASS::negative.binomial(link = "log", theta=1/dispersion[i]), 
-  offset = log(dataSet@colData@listData$sizeFactor)
-)
 # find all covariances for a specific gene
-cova = vector(mode = "double", length = dim(group)[2])
-corre = vector(mode = "double", length = dim(group)[2])
-for(l in 1:dim(group)[2]){
-  j = which(group[, l] == 1)[1]
-  k = which(group[, l] == 1)[2]
-  
-  x_j = design[j, ]
-  x_k = design[k, ]
-  mu_cov = (x_j + x_k) %*% GLMM@beta
-  se = GLMM@pp$theta
-  off = log(dataSet@colData@listData$sizeFactor)[c(j, k)]
-  cova[l] = exp(sum(off) + mu_cov + se^2)*(exp(se^2) - 1)
-  
-  corre[l] = cova[l]/sqrt(exp(off[1] + x_j %*% GLMM@beta + se^2/2) + # poisson part
-                            dispersion[i]*exp(2*off[1] + 2*x_j %*% GLMM@beta + 2*se^2) + # negative binomial part
-                            exp(2*off[1] + 2*x_j %*% GLMM@beta + se^2)*(exp(se^2) - 1)) # mixed effect part
-  corre[l] = corre[l]/sqrt(exp(off[2] + x_k %*% GLMM@beta + se^2/2) + # poisson part
-                            dispersion[i]*exp(2*off[2] + 2*x_k %*% GLMM@beta + 2*se^2) + # negative binomial part
-                            exp(2*off[2] + 2*x_k %*% GLMM@beta + se^2)*(exp(se^2) - 1)) # mixed effect part
-}
+# for one gene, has been implemented into for with check contrast
+
+
+# cova = vector(mode = "double", length = dim(group)[2])
+# corre = vector(mode = "double", length = dim(group)[2])
+# for(l in 1:dim(group)[2]){
+#   j = which(group[, l] == 1)[1]
+#   k = which(group[, l] == 1)[2]
+#   
+#   x_j = design[j, ]
+#   x_k = design[k, ]
+#   mu_cov = (x_j + x_k) %*% GLMM@beta
+#   se = GLMM@pp$theta
+#   off = log(dataSet@colData@listData$sizeFactor)[c(j, k)]
+#   cova[l] = exp(sum(off) + mu_cov + se^2)*(exp(se^2) - 1)
+#   
+#   corre[l] = cova[l]/sqrt(exp(off[1] + x_j %*% GLMM@beta + se^2/2) + # poisson part
+#                             dispersion[i]*exp(2*off[1] + 2*x_j %*% GLMM@beta + 2*se^2) + # negative binomial part
+#                             exp(2*off[1] + 2*x_j %*% GLMM@beta + se^2)*(exp(se^2) - 1)) # mixed effect part
+#   corre[l] = corre[l]/sqrt(exp(off[2] + x_k %*% GLMM@beta + se^2/2) + # poisson part
+#                             dispersion[i]*exp(2*off[2] + 2*x_k %*% GLMM@beta + 2*se^2) + # negative binomial part
+#                             exp(2*off[2] + 2*x_k %*% GLMM@beta + se^2)*(exp(se^2) - 1)) # mixed effect part
+# }
+
+# plot mean correlation for a gene against standard deviation of the random effect for a GLMM
+ggplot() + geom_point(aes(x = checkContrast$mixed.sd, y = rowMeans(corre)), alpha = 0.1)
