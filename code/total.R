@@ -609,7 +609,7 @@ genes = dataSet@assays@data@listData$counts
 # 1189 is first error
 i = 5
 GLMM = glmer(
-  formula = genes[i, ] ~ 1 + design[, -1] + (1|pas_info$sampleid), 
+  formula = genes[i, ] ~ - 1 + design + (1|pas_info$sampleid), 
   family = MASS::negative.binomial(link = "log", theta=1/dispersion[i]), 
   offset = log(dataSet@colData@listData$sizeFactor)
   )
@@ -628,8 +628,8 @@ n = length(rownames(genes))
 
 # create checkContrast (long so import instead)
 
-# checkContrast = data.frame("UI" = contrast.UI[rownames(genes), ][, 2], "UI.glmm" = rep(0, n), "UI.GLM" = rep(0, n), "UI.P" = rep(0, n),
-#                            "AI" = contrast.AI[rownames(genes), ][, 2], "AI.glmm" = rep(0, n), "AI.GLM" = rep(0, n), "AI.P" = rep(0, n),
+# checkContrast = data.frame("UI" = contrast.UI[rownames(genes), ][, 2], "UI.glmm" = rep(0, n), "UI.GLM" = rep(0, n), "UI.P" = rep(0, n), "UI.GLM.P" = rep(0, n),
+#                            "AI" = contrast.AI[rownames(genes), ][, 2], "AI.glmm" = rep(0, n), "AI.GLM" = rep(0, n), "AI.P" = rep(0, n), "AI.GLM.P" = rep(0, n),
 #                            "mixed.sd" = rep(0, n))
 # rownames(checkContrast) = rownames(genes)
 # cova = vector(mode = "double", length = dim(group)[2])
@@ -647,7 +647,7 @@ n = length(rownames(genes))
 #             checkContrast$mixed.sd[i] = temp@optinfo$val[1]
 # 
 #             beta = log2(exp(1))*temp@beta
-#             mu_hat = design %*% beta
+#             mu_hat = exp(design %*% beta)
 #             w_vec = mu_hat/(1.0 + dispersion[i] * mu_hat)
 #             sigma = solve(t(design) %*% diag(array(w_vec)) %*% design)
 # 
@@ -657,18 +657,18 @@ n = length(rownames(genes))
 # 
 #             checkContrast$UI.P[i] = P[5]
 #             checkContrast$AI.P[i] = P[6]
-#             
+# 
 #             for(l in 1:dim(group)[2]){
 #               j = which(group[, l] == 1)[1]
 #               k = which(group[, l] == 1)[2]
-#               
+# 
 #               x_j = design[j, ]
 #               x_k = design[k, ]
 #               mu_cov = (x_j + x_k) %*% temp@beta
 #               se = temp@pp$theta
 #               off = log(dataSet@colData@listData$sizeFactor)[c(j, k)]
 #               cova[l] = exp(sum(off) + mu_cov + se^2)*(exp(se^2) - 1)
-#               
+# 
 #               corre[i, l] = cova[l]/sqrt(exp(off[1] + x_j %*% temp@beta + se^2/2) + # poisson part
 #                                         dispersion[i]*exp(2*off[1] + 2*x_j %*% temp@beta + 2*se^2) + # negative binomial part
 #                                         exp(2*off[1] + 2*x_j %*% temp@beta + se^2)*(exp(se^2) - 1)) # mixed effect part
@@ -685,6 +685,19 @@ n = length(rownames(genes))
 #                 family = MASS::negative.binomial(link = "log", theta=1/dispersion[i]),
 #                 offset = log(dataSet@colData@listData$sizeFactor)
 #               )
+#     
+#       beta = log2(exp(1))*temp$coefficients
+#       mu_hat = exp(design %*% beta)
+#       w_vec = mu_hat/(1.0 + dispersion[i] * mu_hat)
+#       sigma = solve(t(design) %*% diag(array(w_vec)) %*% design)
+#       
+#       SE = log2(exp(1))*sqrt(pmax(diag(sigma), 0))
+#       
+#       P = 2 * pnorm(abs(beta/SE), lower.tail = FALSE)
+#       
+#       checkContrast$UI.GLM.P[i] = P[5]
+#       checkContrast$AI.GLM.P[i] = P[6]
+#     
 #       checkContrast$UI.GLM[i] = temp$coefficients[5]*log2(exp(1))
 #       checkContrast$AI.GLM[i] = temp$coefficients[6]*log2(exp(1))
 #     })
@@ -694,8 +707,10 @@ n = length(rownames(genes))
 # write.csv(checkContrast, "D:\\Essential folders\\Documents\\RStudio\\master\\gene-analysis\\code\\checkContrast.csv")
 # write.csv(corre, "D:\\Essential folders\\Documents\\RStudio\\master\\gene-analysis\\code\\corre.csv")
 
-corre = read.csv("D:\\Essential folders\\Documents\\RStudio\\master\\gene-analysis\\code\\corre.csv", header = TRUE, row.names = 1)
-checkContrast = read.csv("D:\\Essential folders\\Documents\\RStudio\\master\\gene-analysis\\code\\checkContrast.csv", header = TRUE, row.names = 1)
+# These require the location of the git directory
+git = "D:\\Essential folders\\Documents\\RStudio\\master\\gene-analysis\\code"
+corre = read.csv(paste(git, "\\corre.csv", sep = ""), header = TRUE, row.names = 1)
+checkContrast = read.csv(paste(git, "\\checkContrast.csv", sep = ""), header = TRUE, row.names = 1)
 # checkContrast = checkContrast[order(checkContrast$mixed.sd, decreasing = TRUE), ]
 
 
@@ -801,3 +816,35 @@ for(i in 1:dim(group)[2]){
 
 # plot mean correlation for a gene against standard deviation of the random effect for a GLMM
 ggplot() + geom_point(aes(x = checkContrast$mixed.sd, y = rowMeans(corre)), alpha = 0.1)
+
+# Initial idea, requires more explanation than it is worth
+# ggplot() + geom_point(aes(x = checkContrast$mixed.sd[!(checkContrast$mixed.sd < 0.3 & 
+#                                                          abs(checkContrast$UI.glmm - checkContrast$UI.GLM) > 1)], 
+#                           y = (checkContrast$UI.glmm - checkContrast$UI.GLM)[!(checkContrast$mixed.sd < 0.3 & 
+#                                                                                  abs(checkContrast$UI.glmm - checkContrast$UI.GLM) > 1)]
+#                           ), alpha = 0.1)
+# checks of convergence
+# 9, 12, 22, 23 is safe
+# 11635 was observed to also not converge for GLM, the only one where sd was estimated to a larger value
+# 21681, sd = 0
+# 23430, GLMM does converge, but no GLM
+# 10643, neither converges
+# which((checkContrast$UI.glmm - checkContrast$UI.GLM) > 1)
+# i = 10643
+# GLMM = glmer(
+#   formula = genes[i, ] ~ 1 + design[, -1] + (1|pas_info$sampleid),
+#   family = MASS::negative.binomial(link = "log", theta=1/dispersion[i]),
+#   offset = log(dataSet@colData@listData$sizeFactor)
+# )
+# 
+# GLM = glm(
+#   formula = genes[i, ] ~ -1 + design,
+#   family = MASS::negative.binomial(link = "log", theta=1/dispersion[i]),
+#   offset = log(dataSet@colData@listData$sizeFactor)
+# )
+
+# final estimate for difference between coef when GLMM converged (there might be some GLM which did not converge, but also might not)
+ggplot() + geom_point(aes(x = checkContrast$mixed.sd[!is.na(corre[, 1])], y = (checkContrast$UI.glmm - checkContrast$UI.GLM)[!is.na(corre[, 1])]), alpha = 0.1)
+ggplot() + geom_point(aes(x = checkContrast$UI.P[!is.na(corre[, 1])], y = checkContrast$UI.GLM.P[!is.na(corre[, 1])]), alpha = 0.1)
+
+
