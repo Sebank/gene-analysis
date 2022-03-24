@@ -156,16 +156,11 @@ corfit = duplicateCorrelation(logCPM, design, block = pas_info$sampleid)
 
 fit = lmFit(logCPM, design, block = pas_info$sampleid, correlation = corfit$consensus)
 
-fit_alt = lmFit(logCPM, design)
-
 fit2=contrasts.fit(fit,t(C))
-fit2_alt = contrasts.fit(fit_alt, t(C))
 
 fit3 = eBayes(fit2, trend=TRUE)
-fit3_alt = eBayes(fit2_alt, trend = TRUE)
 
 table_fit3 = topTable(fit3, number = 10)
-table_fit3_alt = topTable(fit3_alt, number = 10)
 
 limma::plotMD(fit3, coef = 3)
 limma::plotSA(fit3, col = "green")
@@ -179,19 +174,15 @@ legend("top", legend = levels(pas_info$diseaseinflammation), col = 1:3, pch = 15
 voom_cor = duplicateCorrelation(v,design,block=pas_info$sampleid)
 
 vfit = lmFit(v, design, block = pas_info$sampleid, correlation = voom_cor$consensus, weights = v$weights)
-vfit_alt = lmFit(v, design, weights = v$weights)
 # inne i v er både en ny respons og vekter inn i GLS
 
 C = rbind("IU"=c(0,0,0,0,1,0), #(CU-CH)-(IU-IH)
           "IA"=c(0,0,0,0,0,1), #(CA-CH)-(IA-IH)
           "IA minus IU"=c(0,0,0,0,-1,1)) #(CA-CU)-(IA-IU)
 vfit2 = contrasts.fit(vfit, t(C))
-vfit2_alt = contrasts.fit(vfit_alt, t(C))
 vfit2 = eBayes(vfit2, trend = FALSE)
-vfit2_alt = eBayes(vfit2_alt, trend = FALSE)
 #for specific coef use coef = 1, 2 or 3, as contrast has three coefs
 table_vfit2 = topTable(vfit2, number = 10)
-table_vfit2_alt = topTable(vfit2_alt, number = 10)
 
 ggplot() + geom_histogram(aes(vfit2$p.value[, 3]), binwidth = 0.01, fill = "blue")
 
@@ -265,25 +256,6 @@ ggplot() + geom_hex(aes(x = log(rowMeans(ncounts)), y = log(rowVars(ncounts)))) 
 ###########################################################################
 
 #general venn diagram
-# check model with correlation against model without correlation
-
-# venn = list("limma" = rownames(table_fit3_alt),
-#             "limma with correlation" = rownames(table_fit3), 
-#             "voom with correlation" = rownames(table_vfit2),
-#             "voom" = rownames(table_vfit2_alt))
-# ggvenn(venn, show_percentage = FALSE)
-# 
-# venn.p = list("limma" = rownames(topTable(fit3_alt, number = 10000, p.value = 0.05)),
-#             "limma with correlation" = 
-#               rownames(topTable(fit3, number = 10000, p.value = 0.05)), 
-#             "voom with correlation" = 
-#               rownames(topTable(vfit2, number = 10000, p.value = 0.05)),
-#             "voom" = rownames(topTable(vfit2_alt, number = 10000, p.value = 0.05)))
-# ggvenn(venn.p, show_percentage = FALSE)
-
-#double check that adj.P.val is used
-# tail(topTable(vfit2_alt, number = 10000, p.value = 0.05))
-
 
 #check coef with DESeq2, only considering with correlation
 number = 1000000
@@ -316,92 +288,6 @@ ggvenn(list("limma" = names(keep), "DESeq" = names(keep_DESeq)), show_percentage
 ###########################################################################
 #personal comments, code to quality check changes
 ###########################################################################
-
-#double check if changes made above
-# check that none of the patients are misslabled
-#unique(pas_info$diseaseinflammation[pas_info$tissue=="Ileum tissue"])
-#pas_info$sampleid[pas_info$tissue=="Ileum tissue" & pas_info$diseaseinflammation == "CDA"]
-#pas_info$sampleid[pas_info$tissue=="Ileum tissue" & pas_info$diseaseinflammation == "CDU"]
-
-#unique(pas_info$diseaseinflammation[pas_info$tissue=="Colon tissue"])
-#pas_info$sampleid[pas_info$tissue=="Colon tissue" & pas_info$diseaseinflammation == "CDAi"]
-#pas_info$sampleid[pas_info$tissue=="Colon tissue" & pas_info$diseaseinflammation == "CDUi"]
-
-#finds indexes for New RNA samples, these might be bad
-#New_RNA = grep("New RNA", pas_info_tot$Comment)
-#names_for_referance = pas_info_tot$Sample_ID[New_RNA]
-
-#more a double check than anything else
-#unique(pas_info$diseaseinflammation)
-
-# #finds tables for comparing how much data we have for each group
-# table(pas_info$disease)
-# table(pas_info$inflammation)
-# table(pas_info$tissue,pas_info$inflammation)
-# 
-# table(table(pas_info$sampleid))
-
-
-# cbind(pas_info$sampleid, colnames(count))
-# 
-# #finne konsepter fra data
-# dobbeltsjekke hvor p verdi kommer fra (hvilke elementer fra limma som er relevante)
-# 
-# summary(dge)
-# dge
-# dim(dge)
-# # 27672 110
-# dim(dge$counts)
-# dim(dge$samples)
-# dge$samples
-# 
-# 
-# fit0=lm(logCPM[1,]~design-1)
-# fit0_2 = lmer(logCPM[1,]~design-1 + (1 | pas_info$sampleid))
-# dim(fit0$coefficients)
-# dim(C)
-# fit0.C=C%*%matrix(fit0$coefficients,ncol=1)
-# fit0.C
-# fit0.Ccov=C%*%vcov(fit0)%*%t(C)
-# fit0.Ccov
-# fcontrast3=fit0.C[3,1]^2/fit0.Ccov[3,3]
-# fcontrast2=fit0.C[2,1]^2/fit0.Ccov[2,2]
-# pf(fcontrast2,1,fit0$df.residual,lower.tail=FALSE)
-# pf(fcontrast3,1,fit0$df.residual,lower.tail=FALSE)
-# 
-# dim(fit$coefficients)
-# fit$coefficients[1,]
-# summary(fit0)
-# 
-# str(fit2$contrasts)
-# names(fit2)
-# names(fit)
-# dim(fit2$coefficients)
-# fit$coefficients[1,]
-# 
-# # leter etter pverdier og testobs
-# summary(fit0)
-# 
-# fit3$t[1,2]*sqrt(fit3$s2.post[1])*fit3$stdev.unscaled[1,2]
-# fit0$coefficients[6]
-# fit3$s2.prior[1]
-# fit3$s2.post[1]
-# 
-# plot(fit3$Amean,fit3$s2.prior)
-# plot(fit3$Amean,sqrt(fit3$s2.post),pch=".")
-# lines(lowess(fit3$Amean,sqrt(fit3$s2.post)),col=2)
-# 
-# names(fit3)
-# dim(fit3$p.value)
-# fit3$p.value[1,]
-# fit3$stdev.unscaled[1,]
-# fit3$sigma[1]
-# fit3$Amean[1]
-# 
-# str(v)
-# hj=getEAWP(v)
-# 
-# 
 
 # plot av estimerte og selv estimert mean variance relationship
 ggplot() + 
@@ -474,24 +360,6 @@ cs <- colSums(assay(dataSet, "counts"))
 hist(cs/1e6, col="grey", border="white",
      main="", xlab="column sums (per million)")
 # why are there counts with less than 5? There is just 1, TT38, colsum 306740
-
-# copy paste
-cts <- assay(dataSet, "counts")[,c(1,4)] # choose random samples from different groups and select genes that have more than 5 as count (to give meaningful results)
-idx <- rowSums(cts >= 5) == 2
-cts <- cts[idx,]
-p <- sweep(cts, 2, colSums(cts), "/")
-
-mean.log.p <- rowMeans(log10(p))
-hist(mean.log.p,  col="grey", border="white",
-     main="", xlab="log10 proportion (geometric mean)")
-#observe that most genes fall in the range -7 to -4 (log 10 proportion)
-
-lfc <- log2(p[,2]) - log2(p[,1])
-hist(lfc[between(mean.log.p, -6, -4)], 
-     breaks=seq(-10,10,by=.1),
-     xlim=c(-5,5),
-     col="grey50", border="white",
-     main="", xlab="log2 fold change of proportion")
 
 ###########################################################################
 #deseq (model)
@@ -652,99 +520,6 @@ correlation = function(mu, alpha, tau){
   return(corr)
 }
 
-# old thoughts, manual estimation of everything
-# create checkContrast (long so import instead)
-# n = length(rownames(genes))
-# 
-# checkContrast = data.frame("UI" = contrast.UI[rownames(genes), ][, 2], "UI.glmm" = rep(0, n), "UI.GLM" = rep(0, n), "UI.P" = rep(0, n), "UI.GLM.P" = rep(0, n),
-#                            "AI" = contrast.AI[rownames(genes), ][, 2], "AI.glmm" = rep(0, n), "AI.GLM" = rep(0, n), "AI.P" = rep(0, n), "AI.GLM.P" = rep(0, n),
-#                            "mixed.sd" = rep(0, n))
-# rownames(checkContrast) = rownames(genes)
-# cova = vector(mode = "double", length = dim(group)[2])
-# corre = matrix(nrow = n, ncol = dim(group)[2])
-# 
-# for(i in 1:dim(genes)[1]){
-#   if(!is.na(checkContrast$UI[i]) & !is.na(checkContrast$AI[i])){
-#     try(expr = {
-#             temp = glmer(
-#             formula = genes[i, ] ~ -1 + design + (1|pas_info$sampleid),
-#             family = MASS::negative.binomial(link = "log", theta=1/dispersion[i]),
-#             offset = log(dataSet@colData@listData$sizeFactor)
-#             )
-#             checkContrast$UI.glmm[i] = temp@beta[5]*log2(exp(1))
-#             checkContrast$AI.glmm[i] = temp@beta[6]*log2(exp(1))
-#             checkContrast$mixed.sd[i] = temp@optinfo$val[1]
-# 
-#             # beta = log2(exp(1))*temp@beta
-#             # tau = temp@pp$theta
-#             # mu_hat = exp(design %*% beta)
-#             # w_vec = mu_hat/(1.0 + dispersion[i] * mu_hat)
-#             # sigma = solve(t(design) %*% diag(array(w_vec)) %*% design)
-#             # 
-#             # SE = log2(exp(1))*sqrt(pmax(diag(sigma), 0))
-#             # 
-#             # P = 2 * pnorm(abs(beta/SE), lower.tail = FALSE)
-#             
-#             beta = log2(exp(1))*temp@beta
-#             tau = temp@pp$theta
-#             mu_hat = exp(design %*% beta + log(dataSet@colData@listData$sizeFactor)) * exp(tau^2/2)
-#             w_vec = mu_hat^2/(mu_hat + dispersion[i] * mu_hat^2 * exp(tau^2) + mu_hat^2 * (1 - exp(tau^2)))
-#             sigma = solve(t(design) %*% diag(array(w_vec)) %*% design)
-#             SE = log2(exp(1))*sqrt(pmax(diag(sigma), 0))
-#             P = 2 * pnorm(abs(beta/SE), lower.tail = FALSE)
-#             
-#             checkContrast$UI.P[i] = P[5]
-#             checkContrast$AI.P[i] = P[6]
-# 
-#             for(l in 1:dim(group)[2]){
-#               j = which(group[, l] == 1)[1]
-#               k = which(group[, l] == 1)[2]
-# 
-#               x_j = design[j, ]
-#               x_k = design[k, ]
-#               mu_cov = (x_j + x_k) %*% temp@beta
-#               se = temp@pp$theta
-#               off = log(dataSet@colData@listData$sizeFactor)[c(j, k)]
-#               cova[l] = exp(sum(off) + mu_cov + se^2)*(exp(se^2) - 1)
-# 
-#               corre[i, l] = cova[l]/sqrt(exp(off[1] + x_j %*% temp@beta + se^2/2) + # poisson part
-#                                         dispersion[i]*exp(2*off[1] + 2*x_j %*% temp@beta + 2*se^2) + # negative binomial part
-#                                         exp(2*off[1] + 2*x_j %*% temp@beta + se^2)*(exp(se^2) - 1)) # mixed effect part
-#               corre[i, l] = corre[i, l]/sqrt(exp(off[2] + x_k %*% temp@beta + se^2/2) + # poisson part
-#                                          dispersion[i]*exp(2*off[2] + 2*x_k %*% temp@beta + 2*se^2) + # negative binomial part
-#                                          exp(2*off[2] + 2*x_k %*% temp@beta + se^2)*(exp(se^2) - 1)) # mixed effect part
-#             }
-#         }, silent = TRUE
-#     )
-# 
-# 
-#     tryCatch(expr = {temp = glm(
-#                 formula = genes[i, ] ~ -1 + design,
-#                 family = MASS::negative.binomial(link = "log", theta=1/dispersion[i]),
-#                 offset = log(dataSet@colData@listData$sizeFactor)
-#               )
-# 
-#       beta = log2(exp(1))*temp$coefficients
-#       # mu_hat = exp(design %*% beta)
-#       mu_hat = exp(design %*% beta + log(dataSet@colData@listData$sizeFactor))
-#       w_vec = mu_hat/(1.0 + dispersion[i] * mu_hat)
-#       sigma = solve(t(design) %*% diag(array(w_vec)) %*% design)
-# 
-#       SE = log2(exp(1))*sqrt(pmax(diag(sigma), 0))
-# 
-#       P = 2 * pnorm(abs(beta/SE), lower.tail = FALSE)
-# 
-#       checkContrast$UI.GLM.P[i] = P[5]
-#       checkContrast$AI.GLM.P[i] = P[6]
-# 
-#       checkContrast$UI.GLM[i] = temp$coefficients[5]*log2(exp(1))
-#       checkContrast$AI.GLM[i] = temp$coefficients[6]*log2(exp(1))
-#     }, warning = function(cond){
-#       print(cond)
-#     })
-#   }
-# }
-
 # using well established estimates instead of manual
 
 # create checkContrast (long so import instead)
@@ -818,106 +593,13 @@ corre = read.csv(paste(git, "\\corre.csv", sep = ""), header = TRUE, row.names =
 checkContrast = read.csv(paste(git, "\\checkContrast.csv", sep = ""), header = TRUE, row.names = 1)
 # checkContrast = checkContrast[order(checkContrast$mixed.sd, decreasing = TRUE), ]
 
-# Code for estimating se and effects for DESeq2, note that real code uses QR or something similar (as it is iterative)
-# main reference for source code https://rdrr.io/bioc/DESeq2/src/R/core.R (has links to function calls as well)
-# this is if only intercept
-# mu = matrix( rowMeans(counts(dataSet, normalized = TRUE)) , ncol = 1)
-# w = (mu^(-1) + dispersion)^(-1)
-# betaSE = matrix( log2(exp(1))*(sqrt(rowSums(w)))^-1 )
-
-
-# ridge = diagmat(lambda);
-# solve(beta_hat, x.t() * (x.each_col() % w_vec) + ridge, x.t() * (z % w_vec));
-# mu_hat = nfrow % exp(x * beta_hat);
-# for (int j = 0; j < y_m; j++) {
-#   mu_hat(j) = fmax(mu_hat(j), minmu);
-# }
-# 
-# w_vec = mu_hat/(1.0 + alpha_hat(i) * mu_hat);
-# sigma = (x.t() * (x.each_col() % w_vec) + ridge).i() * x.t() * (x.each_col() % w_vec) * (x.t() * (x.each_col() % w_vec) + ridge).i();
-#          beta_var_mat.row(i) = diagvec(sigma).t();
-
-# i = 5
-# GLMM = glmer(
-#   formula = genes[i, ] ~ 1 + design[, -1] + (1|pas_info$sampleid), 
-#   family = MASS::negative.binomial(link = "log", theta=1/dispersion[i]), 
-#   offset = log(dataSet@colData@listData$sizeFactor)
-# )
-# 
-
-# mu_hat = design %*% GLMM@beta
-# w_vec = mu_hat/(1.0 + dispersion[i] * mu_hat)
-# sigma = solve(t(design) %*% diag(array(w_vec)) %*% design)
-# 
-# SE = log2(exp(1))*sqrt(pmax(diag(sigma), 0))
-# 
-# P = 2 * pnorm(abs(GLMM@beta/SE), lower.tail = FALSE)
-
-# messing with w_vec to get estimate of variance is the same as extracting vcov from GLMM or GLM object
-# Does this imply that extracting the covariance of the assumed normal vcov is the same as using complex negbin?
-# X^T W X is equal to vcov?
-# beware of difference between exponential (normal R pipeline) and 2 base, hopefully we can convert at the end. 
-# I do not see an easy conversion for log normal with base of 2 instead of e
-
 #make comparable to contrast from DESeq2
 contrast.UI.glmm = data.frame("UI" = checkContrast$UI.glmm[checkContrast$UI.P != 0], "P" = checkContrast$UI.P[checkContrast$UI.P != 0])
 rownames(contrast.UI.glmm) = rownames(checkContrast[checkContrast$UI.P != 0, ])
 contrast.UI.glmm = contrast.UI.glmm[order(contrast.UI.glmm$P), ]
 
-# checking vcov against correlation of mixed effects
-# correlation matrix
-vcov(GLM) / t(t(sqrt(diag(vcov(GLM))))) %*% t(sqrt(diag(vcov(GLM))))
-vcov(GLMM) / t(t(sqrt(diag(vcov(GLMM))))) %*% t(sqrt(diag(vcov(GLMM))))
-
 # correlation of mixed effects 
 summary(GLMM)
-
-mu_hat = design %*% GLMM@beta
-W = diag(as.vector(mu_hat/(1.0 + dispersion[i] * mu_hat)))
-
-for(i in 1:dim(group)[2]){
-  print(paste(pas_info$inflammation[which(group[, i] == 1)], pas_info$tissue[which(group[, i] == 1)]))
-}
-
-# find covariance for different genes
-# i is used way too much, so need to initialize this above correlation to make sure it has the right value
-# i = 5
-# GLMM = glmer(
-#   formula = genes[i, ] ~ 1 + design[, -1] + (1|pas_info$sampleid), 
-#   family = MASS::negative.binomial(link = "log", theta=1/dispersion[i]), 
-#   offset = log(dataSet@colData@listData$sizeFactor)
-# )
-# 
-# GLM = glm(
-#   formula = genes[i, ] ~ -1 + design, 
-#   family = MASS::negative.binomial(link = "log", theta=1/dispersion[i]), 
-#   offset = log(dataSet@colData@listData$sizeFactor)
-# )
-
-# find all covariances for a specific gene
-# for one gene, has been implemented into for with check contrast
-
-
-# cova = vector(mode = "double", length = dim(group)[2])
-# corre = vector(mode = "double", length = dim(group)[2])
-# for(l in 1:dim(group)[2]){
-#   j = which(group[, l] == 1)[1]
-#   k = which(group[, l] == 1)[2]
-#   
-#   x_j = design[j, ]
-#   x_k = design[k, ]
-#   mu_cov = (x_j + x_k) %*% GLMM@beta
-#   se = GLMM@pp$theta
-#   off = log(dataSet@colData@listData$sizeFactor)[c(j, k)]
-#   cova[l] = exp(sum(off) + mu_cov + se^2)*(exp(se^2) - 1)
-#   
-#   corre[l] = cova[l]/sqrt(exp(off[1] + x_j %*% GLMM@beta + se^2/2) + # poisson part
-#                             dispersion[i]*exp(2*off[1] + 2*x_j %*% GLMM@beta + 2*se^2) + # negative binomial part
-#                             exp(2*off[1] + 2*x_j %*% GLMM@beta + se^2)*(exp(se^2) - 1)) # mixed effect part
-#   corre[l] = corre[l]/sqrt(exp(off[2] + x_k %*% GLMM@beta + se^2/2) + # poisson part
-#                             dispersion[i]*exp(2*off[2] + 2*x_k %*% GLMM@beta + 2*se^2) + # negative binomial part
-#                             exp(2*off[2] + 2*x_k %*% GLMM@beta + se^2)*(exp(se^2) - 1)) # mixed effect part
-# }
 
 # plot mean correlation for a gene against standard deviation of the random effect for a GLMM
 ggplot() + geom_point(aes(x = checkContrast$mixed.sd, y = rowMeans(corre)), alpha = 0.1)
