@@ -777,7 +777,21 @@ wald.test(vcov(summary(GLM, dispersion = 1)), coef(GLM), Terms = 6, H0 = 1)$resu
 
 # messing with se for negative binomial
 # Mike love uses e and then converts restults to 2
-i = 1
+for(i in 1:length(rownames(genes[include, ])[which(abs((checkContrast$UI.P[include] - checkContrast$UI.GLM.P[include])) > 0.5)])){
+  j = which(rownames(genes) == rownames(genes[include, ])[which(abs((checkContrast$UI.P[include] - checkContrast$UI.GLM.P[include])) > 0.5)][i])
+  GLM = glm(
+    formula = genes[j, ] ~ -1 + design,
+    family = MASS::negative.binomial(link = "log", theta=1/dispersion[j]),
+    offset = log(dataSet@colData@listData$sizeFactor)
+  )
+  GLMM = glmer(
+    formula = genes[j, ] ~ - 1 + design + (1|pas_info$sampleid), 
+    family = MASS::negative.binomial(link = "log", theta=1/dispersion[j]), 
+    offset = log(dataSet@colData@listData$sizeFactor)
+  )
+  print(icc(GLMM))
+}
+i = which(rownames(genes) == rownames(genes[include, ])[which(abs((checkContrast$UI.P[include] - checkContrast$UI.GLM.P[include])) > 0.5)][2])
 GLM = glm(
   formula = genes[i, ] ~ -1 + design,
   family = MASS::negative.binomial(link = "log", theta=1/dispersion[i]),
