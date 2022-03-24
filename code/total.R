@@ -7,6 +7,9 @@ library(hexbin)
 library(apeglm)
 library(readr)
 
+#wald.test
+library(aod)
+
 #file location
 fileloc = "Z:/Atle van Beelen Granlund/"
 git = "D:\\Essential folders\\Documents\\RStudio\\master\\gene-analysis\\code"
@@ -633,6 +636,22 @@ GLM = glm(
 contrast.UI[rownames(genes)[i], ]
 contrast.AI[rownames(genes)[i], ]
 
+# computes the correlation between two observations based on offset + estimated coefficients (mu),
+# standard deviation of mixed effect (tau) and dispersion estimate (alpha) for negative binomial distribution
+correlation = function(mu, alpha, tau){
+  # covariance between two observations from the negative binomial
+  corr = prod(mu)*exp(tau^2)*(exp(tau^2) - 1)
+  # divide it by the root of the variance for one observation
+  corr = corr/sqrt(mu[1] + exp(tau^2/2) +                # poisson part
+                       alpha*mu[1]^2*exp(2*tau^2) +        # negative binomial part
+                       mu[1]*exp(tau^2)*(exp(tau^2) - 1))  # mixed effect part
+  # and the same for the other observation
+  corr = corr/sqrt(mu[2] + exp(tau^2/2) +                # poisson part
+                       alpha*mu[2]^2*exp(2*tau^2) +        # negative binomial part
+                       mu[2]*exp(tau^2)*(exp(tau^2) - 1))  # mixed effect part
+  return(corr)
+}
+
 # old thoughts, manual estimation of everything
 # create checkContrast (long so import instead)
 # n = length(rownames(genes))
@@ -729,74 +748,67 @@ contrast.AI[rownames(genes)[i], ]
 # using well established estimates instead of manual
 
 # create checkContrast (long so import instead)
-# n = length(rownames(genes))
-# 
-# checkContrast = data.frame("UI" = contrast.UI[rownames(genes), ][, 2], "UI.glmm" = rep(0, n), "UI.GLM" = rep(0, n), "UI.P" = rep(0, n), "UI.GLM.P" = rep(0, n),
-#                            "AI" = contrast.AI[rownames(genes), ][, 2], "AI.glmm" = rep(0, n), "AI.GLM" = rep(0, n), "AI.P" = rep(0, n), "AI.GLM.P" = rep(0, n),
-#                            "mixed.sd" = rep(0, n))
-# rownames(checkContrast) = rownames(genes)
-# cova = vector(mode = "double", length = dim(group)[2])
-# corre = matrix(nrow = n, ncol = dim(group)[2])
-# 
-# for(i in 1:dim(genes)[1]){
-#   if(!is.na(checkContrast$UI[i]) & !is.na(checkContrast$AI[i])){
-#     tryCatch(expr = {
-#       temp = glmer(
-#         formula = genes[i, ] ~ -1 + design + (1|pas_info$sampleid),
-#         family = MASS::negative.binomial(link = "log", theta=1/dispersion[i]),
-#         offset = log(dataSet@colData@listData$sizeFactor)
-#       )
-#       checkContrast$UI.glmm[i] = temp@beta[5]*log2(exp(1))
-#       checkContrast$AI.glmm[i] = temp@beta[6]*log2(exp(1))
-#       checkContrast$mixed.sd[i] = temp@optinfo$val[1]
-#       
-#       P = coef(summary(temp))[, 4]
-#       
-#       checkContrast$UI.P[i] = P[5]
-#       checkContrast$AI.P[i] = P[6]
-#       
-#       for(l in 1:dim(group)[2]){
-#         j = which(group[, l] == 1)[1]
-#         k = which(group[, l] == 1)[2]
-#         
-#         se = temp@pp$theta
-#         mu_cov = fitted(temp)[c(j, k)]
-#         cova[l] = prod(mu_cov)*exp(se^2)*(exp(se^2) - 1)
-#         
-#         corre[i, l] = cova[l]/sqrt(mu_cov[1] + exp(se^2/2) + # poisson part
-#                                      dispersion[i]*mu_cov[1]^2*exp(2*se^2) + # negative binomial part
-#                                      mu_cov[1]*exp(se^2)*(exp(se^2) - 1)) # mixed effect part
-#         corre[i, l] = corre[i, l]/sqrt(mu_cov[2] + exp(se^2/2) + # poisson part
-#                                          dispersion[i]*mu_cov[2]^2*exp(2*se^2) + # negative binomial part
-#                                          mu_cov[2]*exp(se^2)*(exp(se^2) - 1)) # mixed effect part
-#       }
-#     }, warning = function(cond){
-#       print(cond)
-#     }, error = function(cond){
-#       print(cond)
-#     },
-#     silent = TRUE
-#     )
-#     
-#     
-#     tryCatch(expr = {temp = glm(
-#       formula = genes[i, ] ~ -1 + design,
-#       family = MASS::negative.binomial(link = "log", theta=1/dispersion[i]),
-#       offset = log(dataSet@colData@listData$sizeFactor)
-#     )
-#     
-#     P = coef(summary(temp, dispersion = 1))[, 4]
-#     
-#     checkContrast$UI.GLM.P[i] = P[5]
-#     checkContrast$AI.GLM.P[i] = P[6]
-#     
-#     checkContrast$UI.GLM[i] = temp$coefficients[5]*log2(exp(1))
-#     checkContrast$AI.GLM[i] = temp$coefficients[6]*log2(exp(1))
-#     }, warning = function(cond){
-#       print(cond)
-#     })
-#   }
-# }
+n = length(rownames(genes))
+
+checkContrast = data.frame("UI" = contrast.UI[rownames(genes), ][, 2], "UI.glmm" = rep(NA, n), "UI.GLM" = rep(NA, n), "UI.P" = rep(NA, n), "UI.GLM.P" = rep(NA, n),
+                           "AI" = contrast.AI[rownames(genes), ][, 2], "AI.glmm" = rep(NA, n), "AI.GLM" = rep(NA, n), "AI.P" = rep(NA, n), "AI.GLM.P" = rep(NA, n),
+                           "mixed.sd" = rep(NA, n))
+rownames(checkContrast) = rownames(genes)
+cova = vector(mode = "double", length = dim(group)[2])
+corre = matrix(nrow = n, ncol = dim(group)[2])
+
+for(i in 1:dim(genes)[1]){
+  if(!is.na(checkContrast$UI[i]) & !is.na(checkContrast$AI[i])){
+    tryCatch(expr = {
+      temp = glmer(
+        formula = genes[i, ] ~ -1 + design + (1|pas_info$sampleid),
+        family = MASS::negative.binomial(link = "log", theta=1/dispersion[i]),
+        offset = log(dataSet@colData@listData$sizeFactor)
+      )
+      checkContrast$UI.glmm[i] = temp@beta[5]*log2(exp(1))
+      checkContrast$AI.glmm[i] = temp@beta[6]*log2(exp(1))
+      checkContrast$mixed.sd[i] = temp@optinfo$val[1]
+
+      P = coef(summary(temp))[, 4]
+
+      checkContrast$UI.P[i] = P[5]
+      checkContrast$AI.P[i] = P[6]
+
+      for(l in 1:dim(group)[2]){
+        j = which(group[, l] == 1)[1]
+        k = which(group[, l] == 1)[2]
+
+        tau = temp@pp$theta
+        mu_cov = fitted(temp)[c(j, k)]
+        corre[i, l] = correlation(mu = mu_cov, alpha = dispersion[i], tau = tau)
+      }
+    }, warning = function(cond){
+      print(cond)
+    }, error = function(cond){
+      print(cond)
+    },
+    silent = TRUE
+    )
+
+
+    tryCatch(expr = {temp = glm(
+      formula = genes[i, ] ~ -1 + design,
+      family = MASS::negative.binomial(link = "log", theta=1/dispersion[i]),
+      offset = log(dataSet@colData@listData$sizeFactor)
+    )
+
+    P = coef(summary(temp, dispersion = 1))[, 4]
+
+    checkContrast$UI.GLM.P[i] = P[5]
+    checkContrast$AI.GLM.P[i] = P[6]
+
+    checkContrast$UI.GLM[i] = temp$coefficients[5]*log2(exp(1))
+    checkContrast$AI.GLM[i] = temp$coefficients[6]*log2(exp(1))
+    }, warning = function(cond){
+      print(cond)
+    })
+  }
+}
 
 # write.csv(checkContrast, "D:\\Essential folders\\Documents\\RStudio\\master\\gene-analysis\\code\\checkContrast.csv")
 # write.csv(corre, "D:\\Essential folders\\Documents\\RStudio\\master\\gene-analysis\\code\\corre.csv")
@@ -924,54 +936,60 @@ ggplot() + geom_point(aes(x = checkContrast$mixed.sd, y = rowMeans(corre)), alph
 # 10643, neither converges
 # which((checkContrast$UI.glmm - checkContrast$UI.GLM) > 1)
 # i = which((checkContrast$UI.glmm - checkContrast$UI.GLM) > 5)[1]
-# GLMM = glmer(
-#   formula = genes[i, ] ~ 1 + design[, -1] + (1|pas_info$sampleid),
-#   family = MASS::negative.binomial(link = "log", theta=1/dispersion[i]),
-#   offset = log(dataSet@colData@listData$sizeFactor)
-# )
-# 
-# tryCatch(expr = {GLM = glm(
-#   formula = genes[i, ] ~ -1 + design,
-#   family = MASS::negative.binomial(link = "log", theta=1/dispersion[i]),
-#   offset = log(dataSet@colData@listData$sizeFactor)
-#   )
-# 
-#   print("text")
-# }, warning = function(condition){
-#   print(str(condition))
-# }
-# )
+i = which(rownames(genes) == "ENSG00000164035")
+GLMM = glmer(
+  formula = genes[i, ] ~ 1 + design[, -1] + (1|pas_info$sampleid),
+  family = MASS::negative.binomial(link = "log", theta=1/dispersion[i]),
+  offset = log(dataSet@colData@listData$sizeFactor)
+)
+
+GLM = glm(
+  formula = genes[i, ] ~ -1 + design,
+  family = MASS::negative.binomial(link = "log", theta=1/dispersion[i]),
+  offset = log(dataSet@colData@listData$sizeFactor)
+)
+
+summary(GLM, dispersion = 1)
+summary(GLMM)
 
 # remove samples that did not converge and perform checks
-exclude = checkContrast$AI.GLM != 0 & !is.na(corre[, 1])
+include = checkContrast$AI.GLM != 0 & !is.na(corre[, 1])
 # final estimate for difference between coef when GLMM converged (there might be some GLM which did not converge, but also might not, should be fixed)
-ggplot() + geom_point(aes(x = checkContrast$mixed.sd[exclude], 
-                          y = rowMeans(corre[exclude, ])), alpha = 0.1) + 
+ggplot() + geom_point(aes(x = checkContrast$mixed.sd[include], 
+                          y = rowMeans(corre[include, ])), alpha = 0.1) + 
   labs(x = "standard deviation of mixed effects", y = "mean of correlations for a gene", title = "correlation against standard deviation")
-ggplot() + geom_point(aes(x = rowMeans(corre[exclude, ]), 
-                          y = (checkContrast$UI.glmm - checkContrast$UI.GLM)[exclude]), alpha = 0.1) +
+ggplot() + geom_point(aes(x = rowMeans(corre[include, ]), 
+                          y = (checkContrast$UI.glmm - checkContrast$UI.GLM)[include]), alpha = 0.1) +
   labs(x = "Average correlation", y = "GLMM effect - GLM effect", title = "UI plot for converged genes")
-ggplot() + geom_point(aes(x = checkContrast$UI.P[exclude], 
-                          y = checkContrast$UI.GLM.P[exclude]), alpha = 0.1) +
-  labs(x = "P from GLM", y = "P from GLMM", title = "comparison of estimated P values")
+ggplot() + geom_point(aes(x = checkContrast$UI.P[include], 
+                          y = checkContrast$UI.GLM.P[include]), alpha = 0.1) +
+  labs(x = "P from GLMM", y = "P from GLM", title = "comparison of estimated P values")
 
 # alt checks
-ggplot() + geom_point(aes(x = rowMeans(corre[exclude, ]), 
-                          y = abs(checkContrast$UI.glmm - checkContrast$UI.GLM)[exclude]), alpha = 0.1) +
-  labs(x = "mixed effect standard deviation", y = "absolute value of GLMM effect - GLM effect", title = "UI plot for converged genes")
+ggplot() + geom_point(aes(x = rowMeans(corre[include, ]), 
+                          y = abs(checkContrast$UI.glmm - checkContrast$UI.GLM)[include]), alpha = 0.1) +
+  labs(x = "mixed effect average correlation", y = "absolute value of GLMM effect - GLM effect", title = "UI plot for converged genes")
 # ENSG00000152977 fails for some reason
-ggplot() + geom_point(aes(x = rowMeans(corre[exclude, ]), 
-                          y = (checkContrast$UI.glmm/checkContrast$UI.GLM)[exclude]), alpha = 0.1) +
-  labs(x = "mixed effect standard deviation", y = "GLMM effect divided by GLM effect", title = "UI plot for converged genes")
+ggplot() + geom_point(aes(x = rowMeans(corre[include, ]), 
+                          y = (checkContrast$UI.glmm/checkContrast$UI.GLM)[include]), alpha = 0.1) +
+  labs(x = "mixed effect average correlation", y = "GLMM effect divided by GLM effect", title = "UI plot for converged genes")
 # extract names to get contrast from DESeq2, then consider what is NA for both
-names = rownames(checkContrast[checkContrast$AI.GLM != 0 & !is.na(corre[, 1]), ])
+names = rownames(checkContrast[include, ])
 ggplot() + geom_point(aes(x = checkContrast[names, ]$UI.P, 
                           y = contrast.UI[names, ]$pvalue), alpha = 0.1) + 
   labs(x = "p value for GLMM", y = "p value for DESeq2", title = "compare P values between models and DESeq2")
 ggplot() + geom_point(aes(x = checkContrast[names, ]$UI.GLM.P, 
                           y = contrast.UI[names, ]$pvalue), alpha = 0.1)+ 
   labs(x = "p value for GLM", y = "p value for DESeq2", title = "compare P values between models and DESeq2")
-ggplot() + geom_histogram(aes(rowMeans(corre[exclude, ])), binwidth = 0.01)
+ggplot() + geom_histogram(aes(rowMeans(corre[include, ]), y = ..count../sum(..count..)), binwidth = 0.01)
+ggplot() + geom_point(aes(x = rowMeans(corre[include, ]), 
+                          y = (checkContrast$UI.P[include] - checkContrast$UI.GLM.P[include])), alpha = 0.3) +
+  labs(x = "mean of correlation", y = "difference in P value between GLMM and GLM", title = "difference of P value against correlation for UI")
+
+# find percent for samples with estimated correlation greeater than x
+temp = rowMeans(corre[include, ])
+length(temp[temp >= 0.1])/length(temp)
+length(temp[temp >= 0.05])/length(temp)
 
 # simulation and comparison between GLMM and GLM
 g = 5
@@ -991,7 +1009,6 @@ GLM = glm(
 n = 100
 beta = GLMM@beta
 tau = GLMM@pp$theta
-beta[5] = 0
 
 
 tissue = c()
@@ -1048,26 +1065,33 @@ for(i in 1:n){
 tissue = factor(tissue, levels = c("Colon", "Ileum"))
 inflammation = factor(inflammation, c("H", "U", "A"))
 
-m = 100
+m = 10
 est = data.frame("GLMM" = rep(NA, m), "GLM" = rep(NA, m), "se" = rep(NA, m), "GLM.P" = rep(NA, m), "GLMM.P" = rep(NA, m))
 
 for(i in 1:m){
   u = rnorm(100, sd = tau)
   Y = rnbinom(n = 2*n, size = 1/dispersion[g], mu = exp(model.matrix(~tissue * inflammation) %*% beta + model.matrix(~ -1 + pers) %*% u))
   
-  GLMM_compare = glmer(formula = Y ~ - 1 + model.matrix(~tissue * inflammation) + (1|pers), family = MASS::negative.binomial(link = "log", theta = 1/dispersion[g]))
-  GLM_compare = glm(formula = Y ~ - 1 + model.matrix(~tissue * inflammation), family = MASS::negative.binomial(link = "log", theta = 1/dispersion[g]))
+  GLMM_compare = glmer(formula = Y ~ - 1 + model.matrix(~tissue * inflammation) + (1|pers), 
+                       family = MASS::negative.binomial(link = "log", theta = 1/dispersion[g]))
+  GLM_compare = glm(formula = Y ~ - 1 + model.matrix(~tissue * inflammation), 
+                    family = MASS::negative.binomial(link = "log", theta = 1/dispersion[g]))
   
   est$GLM[i] = coef(GLM_compare)[5]
   est$GLMM[i] = fixef(GLMM_compare)[5]
   est$se[i] = GLMM_compare@pp$theta
-  est$GLM.P[i] = coef(summary(GLM_compare, dispersion = 1))[5, 4]
-  est$GLMM.P[i] = coef(summary(GLMM_compare))[5, 4]
+  # est$GLM.P[i] = coef(summary(GLM_compare, dispersion = 1))[6, 4]
+  # est$GLMM.P[i] = coef(summary(GLMM_compare))[6, 4]
+  est$GLM.P[i] = wald.test(vcov(summary(GLM_compare, dispersion = 1)), coef(GLM_compare), Terms = 6, H0 = beta[6])$result$chi2[3]
+  est$GLMM.P[i] = wald.test(vcov(summary(GLMM_compare)), GLMM_compare@beta, Terms = 6, H0 = beta[6])$result$chi2[3]
 }
-ggplot() + geom_histogram(aes(est$GLM, y = ..density.., fill = "GLM"), alpha = 0.7, binwidth = 0.03) + 
-  geom_histogram(aes(est$GLMM, y = ..density.., fill = "GLMM"), alpha = 0.7, binwidth = 0.03)
-est = read.csv(paste(git, "\\est.csv", sep = ""), header = TRUE, row.names = 1)
+ggplot(aes(y = ..count../sum(..count..)), data = est) +
+  geom_histogram(aes(x = GLM.P, fill = "GLM"), alpha = 0.7, binwidth = 0.01) +
+  geom_histogram(aes(x = GLMM.P, fill = "GLMM"), alpha = 0.3, binwidth = 0.01)
 
+# read values
+# est = read.csv(paste(git, "\\est.csv", sep = ""), header = TRUE, row.names = 1)
+wald.test(vcov(summary(GLM, dispersion = 1)), coef(GLM), Terms = 6, H0 = 1)$result$chi2[3]
 
 # messing with se for negative binomial
 # Mike love uses e and then converts restults to 2
@@ -1102,3 +1126,23 @@ W = weights(GLMM, type = "working")
 sigma = solve(t(X) %*% diag(W) %*% X)
 sigma
 vcov(GLMM)/sigma
+
+res.ape = lfcShrink(dds, coef = 5, type = "apeglm")
+library(insight)
+library(performance)
+
+ICC = c()
+ICC_conditional = c()
+performance::icc(GLMM)
+for(i in which(rowMeans(corre) > 1e-6)){
+  GLMM = glmer(
+    formula = genes[i, ] ~ -1 + design + (1|pas_info$sampleid),
+    family = MASS::negative.binomial(link = "log", theta=1/dispersion[i]),
+    offset = log(dataSet@colData@listData$sizeFactor)
+  )
+  ICC = c(ICC, performance::icc(GLMM)$ICC_adjusted)
+  ICC_conditional = c(ICC_conditional, performance::icc(GLMM)$ICC_conditional)
+}
+
+ggplot() + geom_point(aes(x = ICC, y = rowMeans(corre)[which(rowMeans(corre) > 1e-6)]), alpha = 0.1) +
+  labs(x = "Adjusted ICC", y = "mean of correlation (self computed)")
