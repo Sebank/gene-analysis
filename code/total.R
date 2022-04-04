@@ -616,6 +616,8 @@ GLM = glm(
 summary(GLM, dispersion = 1)
 summary(GLMM)
 
+# get an idea of the dispersion
+ggplot() + geom_bar(aes(x = dispersion))
 # remove samples that did not converge and perform checks
 include = checkContrast$AI.GLM != 0 & !is.na(corre[, 1])
 # final estimate for difference between coef when GLMM converged (there might be some GLM which did not converge, but also might not, should be fixed)
