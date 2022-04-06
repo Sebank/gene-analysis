@@ -2,12 +2,13 @@ library(lme4)
 library(insight)
 library(performance)
 library(ggplot2)
+library(MASS)
 
 set.seed(123)
 
 # define global variables once at top
 beta = matrix(c(3,0),ncol=1)
-tau = 0.2
+tau = 0.5
 
 n = 200
 
@@ -15,12 +16,12 @@ n = 200
 x = cbind(rep(1, n), rep(0:1, n/2))
 
 # this alpha is extracted from the DESeq2 data for the simulations to be more comparable to real data
-alpha = 0.22
+alpha = 0.25
 #    Min.  1st Qu.   Median     Mean  3rd Qu.     Max. 
 #0.01168  0.10547  0.25233  0.57844  0.63406 56.06058
 
 
-group = 1
+group = 100
 
 # conditional model
 # data.frame("E" = rbind(c(1, 0), c(1, 1)) %*% beta, "Var" = rbind(c(1, 0), c(1, 1)) %*% beta + alpha * (rbind(c(1, 0), c(1, 1)) %*% beta)^2)
@@ -33,6 +34,7 @@ marginal = data.frame("E" = exp(rbind(c(1, 0), c(1, 1)) %*% beta) * exp(tau^2/2)
 
 # two observations from the same tissue from the same patient (want from different tissue)
 # x=cbind(rep(1,n),c(rep(0,n/2),rep(1,n/2)))
+
 
 # beware that the function utilizes x, beta and tau, which are global variables
 create_dataset = function(group = 100, n = 200){
@@ -66,7 +68,7 @@ create_dataset = function(group = 100, n = 200){
   
   return(
     list("y" = y, "gamma" = gamma, "eta" = eta, "pers" = pers)
-    )
+  )
 }
 
 make_conditional_plot = function(conditional){
@@ -81,18 +83,23 @@ make_conditional_plot = function(conditional){
   # and plots it with an observation conditional on the effect being zero
   
   obj = ggplot() +
-    geom_col(aes(x = 0:n_plot, y = dnbinom(x = 0:n_plot, size = 1/alpha, mu = exp(beta[1]))), fill = "#CC0000") +
-    geom_col(aes(x = 0:n_plot, y = dnbinom(x = 0:n_plot, size = 1/alpha, mu = exp(conditional))), fill = "#000099", alpha = 0.6) +
+    geom_col(aes(x = 0:n_plot, y = dnbinom(x = 0:n_plot, size = 1/alpha, mu = exp(beta[1])), fill = "gamma = 0")) +
+    geom_col(aes(x = 0:n_plot, y = dnbinom(x = 0:n_plot, size = 1/alpha, mu = exp(conditional)), fill = "gamma != 0"), alpha = 0.6) +
     annotate("label", x = n_plot - n_plot/4, y = 0.02, label = paste("gamma =", round(conditional - beta[1], 3))) +
-    labs(x = "", y = "")
+    labs(x = "", y = "", fill ="") + xlim(0, n_plot) + ylim(0, 0.07)
   return(obj)
 }
 
-
+marginal_distribution = c()
+for(i in 1:100){
+  marginal_distribution = c(marginal_distribution, create_dataset(group = 0)$y)
+}
+ggplot() + geom_histogram(aes(x = marginal_distribution, y = ..count../sum(..count..)), bins = 100)
 
 # collecting relevant data to initialize the random variables before launching a function that depends on them (not good coding practice)
 result = create_dataset(group = group, n = n)
 
+data_frame = data.frame("y" = result$y, "x" = x, "pers" = result$pers)
 y = result$y
 eta = result$eta
 gamma = result$gamma
@@ -119,8 +126,8 @@ a6 = make_conditional_plot(q[6])
 a7 = make_conditional_plot(q[7])
 a8 = make_conditional_plot(q[8])
 a9 = make_conditional_plot(q[9])
-library(gridExtra)
-grid.arrange(a1, a2, a3, a4, a5, a6, a7, a8, a9, nrow = 3)
+library(ggpubr)
+ggarrange(a1, a2, a3, a4, a5, a6, a7, a8, a9, ncol = 3, nrow = 3, common.legend = TRUE)
 
 # ggplot() + 
 #   geom_col(aes(x = 0:n_plot, y = dnbinom(x = 0:n_plot, size = 1/alpha, mu = exp(beta[1])), fill = "GLM equivalent")) +
@@ -138,7 +145,7 @@ ggplot() +
   annotate("label", x = mean(y), y = pos + 0.01, label = "mean +/- sd")
   labs(x = "x", y = "y", title = "observed draws from negbin GLMM")
 
-fit = glm(y ~ x-1, family=MASS::negative.binomial(link = "log", theta = 1/alpha))
+fit = glm.nb(y ~ x-1, link = "log", data = data_frame)
 
 # summary(fit, dispersion=1)
 # 
@@ -146,7 +153,7 @@ fit = glm(y ~ x-1, family=MASS::negative.binomial(link = "log", theta = 1/alpha)
 # 
 # sqrt(diag(vcov(summary(fit, dispersion = 1))))
 
-fit2 = glmer(formula = y ~ x-1 + (1|pers), family = MASS::negative.binomial(link = "log", theta = 1/alpha))
+fit2 = glmer.nb(formula = y ~ x-1 + (1|pers), data = data_frame)
 
 # summary(fit2)
 # 
@@ -161,30 +168,38 @@ summary(fit2)$optinfo$conv$lme4$code
 
 m = 10000
 results = data.frame("intercept" = rep(NA, m), "effect" = rep(NA, m), 
-                     "intercept.se" = rep(NA, m), "effect.se" = rep(NA, m))
+                     "intercept.se" = rep(NA, m), "effect.se" = rep(NA, m), "alpha" = rep(NA, m))
 results_GLMM = data.frame("intercept" = rep(NA, m), "effect" = rep(NA, m), 
                           "intercept.se" = rep(NA, m), "effect.se" = rep(NA, m), 
-                          "ICC" = rep(NA, m), "ICC_conditional" = rep(NA, m))
-pers = create_dataset(group = group, n = n)$pers
+                          "ICC" = rep(NA, m), "ICC_conditional" = rep(NA, m), "alpha" = rep(NA, m))
+
+time = Sys.time()
 
 # simulate different datasets and fit GLM and GLMM models to them, then store relevant values for comparison
 for(i in 1:m){
   tryCatch(
     expr = {
-      if(i %% (m/100) == 0) print(paste("Progression:", 100*i/m, "%"))
+      if(i %% (m/100) == 0){
+        print(paste("Progression:", 100*i/m, "%."), sep = "")
+        print(Sys.time() - time)
+        }
       temp = create_dataset(group = group, n = n)$y
-      temp_fit = glm(temp ~ x-1,family=MASS::negative.binomial(link = "log", theta = 1/alpha))
-      temp_GLMM = glmer(formula = temp ~ x-1 + (1|pers), family = MASS::negative.binomial(link = "log", theta = 1/alpha))
+      temp_fit = glm.nb(temp ~ x-1, link = "log", data = data_frame)
+      temp_GLMM = glmer.nb(formula = temp ~ x-1 + (1|pers), data = data_frame)
       
-      results$intercept[i] = coef(summary(temp_fit, dispersion = 1))[1, 1]
-      results$intercept.se[i] = coef(summary(temp_fit, dispersion = 1))[1, 2]
-      results$effect[i] = coef(summary(temp_fit, dispersion = 1))[2, 1]
-      results$effect.se[i] = coef(summary(temp_fit, dispersion = 1))[2, 2]
+      coef_summmary_temp_fit = coef(summary(temp_fit, dispersion = 1))
+      results$intercept[i] = coef_summmary_temp_fit[1, 1]
+      results$intercept.se[i] = coef_summmary_temp_fit[1, 2]
+      results$effect[i] = coef_summmary_temp_fit[2, 1]
+      results$effect.se[i] = coef_summmary_temp_fit[2, 2]
+      results$alpha[i] = 1/temp_fit$theta
       
-      results_GLMM$intercept[i] = coef(summary(temp_GLMM))[1, 1]
-      results_GLMM$intercept.se[i] = coef(summary(temp_GLMM))[1, 2]
-      results_GLMM$effect[i] = coef(summary(temp_GLMM))[2, 1]
-      results_GLMM$effect.se[i] = coef(summary(temp_GLMM))[2, 2]
+      coef_summmary_temp_GLMM = coef(summary(temp_GLMM))
+      results_GLMM$intercept[i] = coef_summmary_temp_GLMM[1, 1]
+      results_GLMM$intercept.se[i] = coef_summmary_temp_GLMM[1, 2]
+      results_GLMM$effect[i] = coef_summmary_temp_GLMM[2, 1]
+      results_GLMM$effect.se[i] = coef_summmary_temp_GLMM[2, 2]
+      results_GLMM$alpha[i] = 1/getME(temp_GLMM, "glmer.nb.theta")
       
       temp_icc = icc(temp_GLMM)
       results_GLMM$ICC[i] = temp_icc$ICC_adjusted
@@ -197,45 +212,81 @@ for(i in 1:m){
   )
 }
 
+P = list("GLM" = 2 * pnorm(abs(results$effect/results$effect.se), lower.tail = FALSE), 
+         "GLM.adj" = c(), 
+         "GLMM" = 2 * pnorm(abs(results_GLMM$effect/results_GLMM$effect.se), lower.tail = FALSE), 
+         "GLMM.adj" = c())
+
+P$GLM.adj = sort(P$GLM[!is.na(P$GLM)])
+P$GLMM.adj = sort(P$GLMM[!is.na(P$GLMM)])
+
+for(i in (length(P$GLM.adj) - 1):1){
+  P$GLM.adj[i] = min(P$GLM.adj[i + 1], P$GLM.adj[i]*length(P$GLM.adj)/i)
+  P$GLMM.adj[i] = min(P$GLMM.adj[i + 1], P$GLMM.adj[i]*length(P$GLMM.adj)/i)
+}
+
 # plot counts of P values for GLMM and GLM simulations
 ggplot() + 
-  geom_histogram(aes(x = 2 * pnorm(abs(results$effect/results$effect.se), lower.tail = FALSE), 
+  geom_histogram(aes(x = P$GLM, 
                      y = ..count../sum(..count..), fill = "GLM"), breaks = 0:25/25) + 
-  geom_histogram(aes(x = 2 * pnorm(abs(results_GLMM$effect/results_GLMM$effect.se), lower.tail = FALSE), 
+  geom_histogram(aes(x = P$GLMM, 
                      y = ..count../sum(..count..), fill = "GLMM"), alpha = 0.5, breaks = 0:25/25) +
-  labs(x = "P value for models", y = "proportion", title = "counts of P values for GLMM and GLM simulations")
+  labs(x = "P value for models", y = "proportion", title = "counts of P values for GLMM and GLM simulations", fill = "Type of model") +
+  xlim(0, 1) + ylim(0, 0.05)
+ggsave(paste("P count tau = ", tau, ", group = ", group, ", number of simuations = ", m, ".pdf"), width = 15, height = 10, units = "cm")
 
 # plot distribution of ICC when simulating a correlated GLMM
 ggplot() + 
   geom_histogram(aes(x = results_GLMM$ICC, y = ..count../sum(..count..), fill = "adjusted ICC"), breaks = 0:100/100) + 
   geom_histogram(aes(x = results_GLMM$ICC_conditional, y = ..count../sum(..count..), fill = "conditional ICC"), alpha = 0.5, breaks = 0:100/100) + 
-  labs(x = "estimated ICC", title = "distribution of ICC when simulating a correlated GLMM")
+  labs(x = "estimated ICC", title = "distribution of ICC when simulating a correlated GLMM", y = "proportion", fill = "") + 
+  xlim(0, 1) + ylim(0, 0.05)
+ggsave(paste("ICC tau = ", tau, ", group = ", group, ", number of simuations = ", m, ".pdf"), width = 15, height = 10, units = "cm")
 
 # plot comparison of p values for ICC
 ggplot() + 
-  geom_point(aes(x = 2 * pnorm(abs(results$effect/results$effect.se), lower.tail = FALSE), 
-                 y = 2 * pnorm(abs(results_GLMM$effect/results_GLMM$effect.se), lower.tail = FALSE)), alpha = 0.1) +
-  labs(x = "P value GLM", y = "P value GLMM", title = "comparison of p values for ICC")
+  geom_point(aes(x = P$GLM, 
+                 y = P$GLMM), alpha = 0.1) +
+  labs(x = "P value GLM", y = "P value GLMM", title = "comparison of p values for ICC") +
+  xlim(0, 0.07) + ylim(0, 0.07)
+ggsave(paste("P compare restricted tau = ", tau, ", group = ", group, ", number of simuations = ", m, ".pdf"), width = 15, height = 15, units = "cm")
+
+# plot comparison of p values for ICC
+ggplot() + 
+  geom_point(aes(x = P$GLM, 
+                 y = P$GLMM), alpha = 0.1) +
+  labs(x = "P value GLM", y = "P value GLMM", title = "comparison of p values for ICC") +
+  xlim(0, 1) + ylim(0, 1)
+ggsave(paste("P compare tau = ", tau, ", group = ", group, ", number of simuations = ", m, ".pdf"), width = 15, height = 15, units = "cm")
 
 # plot difference in P value between GLMM against GLM as reference
 ggplot() +
   geom_point(aes(x = results_GLMM$ICC,
-                 y = 2 * pnorm(abs(results_GLMM$effect/results_GLMM$effect.se), lower.tail = FALSE) -
-                 2 * pnorm(abs(results$effect/results$effect.se), lower.tail = FALSE) ), alpha = 0.1) +
-  labs(x = "ICC adjusted", y = "difference in P value of GLMM subtracted by GLM")
+                 y = P$GLMM -
+                   P$GLM ), alpha = 0.06) +
+  labs(x = "ICC adjusted", y = "difference in P value of GLMM subtracted by GLM") +
+  xlim(0, 1) + ylim(-1, 1)
+ggsave(paste("P difference tau = ", tau, ", group = ", group, ", number of simuations = ", m, ".pdf"), width = 15, height = 10, units = "cm")
 
+# Does this do anything, adjused P values
 remove.na = !is.na(results_GLMM$intercept)
 y = list("GLMM" = rep(0, 101), "GLM" = rep(0, 101))
 for(i in 1:101){
-  y$GLMM[i] = sum(2 * pnorm(abs(results_GLMM$effect/results_GLMM$effect.se)[remove.na], 
-                         lower.tail = FALSE) <= (i-1)/100)/length(results_GLMM$intercept[remove.na])
-  y$GLM[i] =  sum(2 * pnorm(abs(results$effect/results$effect.se)[remove.na], 
-                         lower.tail = FALSE) <= (i-1)/100)/length(results$intercept[remove.na])
+  y$GLMM[i] = sum(P$GLMM[remove.na] <= (i-1)/100)/length(results_GLMM$intercept[remove.na])
+  y$GLM[i] =  sum(P$GLM[remove.na] <= (i-1)/100)/length(results$intercept[remove.na])
 }
 ggplot() +
-  geom_line(aes(x = c(0, 1), y = c(0, 1), col = "truth")) + 
+  geom_line(aes(x = c(0, 1), y = c(0, 1), col = "exact")) + 
   geom_line(aes(x = 0:100/100, 
                 y = y$GLMM, col = "GLMM")) +
   geom_line(aes(x = 0:100/100, 
                 y = y$GLM, col = "GLM")) +
-  labs(x = "p values", y = "proportion", title = "cumulative p values")
+  labs(x = "p values", y = "cumulative proportion", title = "cumulative p values", col = "")
+ggsave(paste("P cumulative tau = ", tau, ", group = ", group, ", number of simuations = ", m, ".pdf"), width = 15, height = 15, units = "cm")
+
+ggplot() + geom_histogram(aes(x = results$alpha, fill = "GLM", y = ..count../sum(..count..)), alpha = 0.8) + 
+  geom_histogram(aes(x = results_GLMM$alpha, fill = "GLMM", y = ..count../sum(..count..)), alpha = 0.4) + 
+  geom_vline(xintercept = mean(results$alpha[!is.na(results$alpha)])) + 
+  geom_vline(xintercept = mean(results_GLMM$alpha[!is.na(results$alpha)])) + 
+  labs(x = "alpha", y = "proportion", fill = "", title = "Distribution of alpha for estimated GLM and GLMM models")
+ggsave(paste("alpha distribution tau = ", tau, ", group = ", group, ", number of simuations = ", m, ".pdf"), width = 15, height = 15, units = "cm")
