@@ -3,6 +3,7 @@ library(insight)
 library(performance)
 library(ggplot2)
 library(MASS)
+library(ggpubr)
 
 set.seed(123)
 
@@ -20,6 +21,8 @@ alpha = 0.25
 #    Min.  1st Qu.   Median     Mean  3rd Qu.     Max. 
 #0.01168  0.10547  0.25233  0.57844  0.63406 56.06058
 
+# define endpoint of probability mass function
+n_plot = 100
 
 group = 100
 
@@ -86,15 +89,42 @@ make_conditional_plot = function(conditional){
     geom_col(aes(x = 0:n_plot, y = dnbinom(x = 0:n_plot, size = 1/alpha, mu = exp(beta[1])), fill = "gamma = 0")) +
     geom_col(aes(x = 0:n_plot, y = dnbinom(x = 0:n_plot, size = 1/alpha, mu = exp(conditional)), fill = "gamma != 0"), alpha = 0.6) +
     annotate("label", x = n_plot - n_plot/4, y = 0.02, label = paste("gamma =", round(conditional - beta[1], 3))) +
-    labs(x = "", y = "", fill ="") + xlim(0, n_plot) + ylim(0, 0.07)
+    labs(x = "", y = "", fill ="") + xlim(-0.5, n_plot) + ylim(0, 0.07)
   return(obj)
 }
 
+# # plot a single realization
+# pos = max(table(y))/length(y)*1.1
+# ggplot() + 
+#   #  geom_col(aes(x = 0:n_plot, y = dnbinom(x = 0:n_plot, size = 1/alpha, mu = exp(beta[1])), fill = "GLM equivalent")) +
+#   geom_bar(aes(x = y, y = ..count../sum(..count..), fill = "realization"), alpha = 0.7) + 
+#   geom_segment(aes(x = mean(y) - sqrt(var(y)), xend = mean(y) + sqrt(var(y)), y = pos, yend = pos)) + 
+#   geom_point(aes(x = mean(y), y = pos)) + 
+#   annotate("label", x = mean(y), y = pos + 0.01, label = "mean +/- sd") + 
+#   labs(x = "x", y = "y", title = "observed draws from negbin GLMM")
+
+# Plot marginal distribution
 marginal_distribution = c()
 for(i in 1:100){
   marginal_distribution = c(marginal_distribution, create_dataset(group = 0)$y)
 }
-ggplot() + geom_histogram(aes(x = marginal_distribution, y = ..count../sum(..count..)), bins = 100)
+y_pos = max(c(max(table(marginal_distribution))/length(marginal_distribution), dnbinom(x = 0:n_plot, size = 1/alpha, mu = exp(beta[1]))))*1.1
+ggplot() + 
+  geom_histogram(aes(x = marginal_distribution, y = ..count../sum(..count..), fill = "GLMM", col = "GLMM"), breaks = (-1/2):(n_plot + 1/2)) +
+  geom_col(aes(x = 0:n_plot, y = dnbinom(x = 0:n_plot, size = 1/alpha, mu = exp(beta[1])), fill = "GLM", col = "GLM"), alpha = 0.4) +
+  geom_segment(aes(x = mean(marginal_distribution) - sd(marginal_distribution), 
+                   xend = mean(marginal_distribution) + sd(marginal_distribution), 
+                   y = y_pos, yend = y_pos, col = "GLMM")) + 
+  geom_point(aes(x = mean(marginal_distribution), y = y_pos, col = "GLMM")) +
+  geom_segment(aes(x = exp(beta[1]) - sqrt(exp(beta[1]) + alpha*exp(2*beta[1])), 
+                                           xend = exp(beta[1]) + sqrt(exp(beta[1]) + alpha*exp(2*beta[1])),
+                   y = y_pos-0.001, yend = y_pos-0.001, col = "GLM")) +
+  geom_point(aes(x = exp(beta[1]), y = y_pos - 0.001, col = "GLM")) +
+  annotate("label", x = mean(marginal_distribution), y = y_pos + 0.005, label = "mean +/- sd") +
+  xlim(-0.5, n_plot) + guides(col = "none") + 
+  labs(x = "x", y = "Proportion", fill = "")
+cat(paste(" \t\t E\t\t\t Var\n Theoretical:\t", marginal$E[1], "\t", sqrt(marginal$Var[1]), "\n Estimated:\t", mean(marginal_distribution), "\t\t", sd(marginal_distribution)))
+
 
 # collecting relevant data to initialize the random variables before launching a function that depends on them (not good coding practice)
 result = create_dataset(group = group, n = n)
@@ -112,9 +142,6 @@ pers = result$pers
 mean(y)/marginal$E[1]
 var(y)/marginal$Var[1]
 
-# define endpoint of probability mass function
-n_plot = 100
-
 q = sample(eta, 9)
 #
 a1 = make_conditional_plot(q[1])
@@ -126,7 +153,7 @@ a6 = make_conditional_plot(q[6])
 a7 = make_conditional_plot(q[7])
 a8 = make_conditional_plot(q[8])
 a9 = make_conditional_plot(q[9])
-library(ggpubr)
+
 ggarrange(a1, a2, a3, a4, a5, a6, a7, a8, a9, ncol = 3, nrow = 3, common.legend = TRUE)
 
 # ggplot() + 
@@ -142,7 +169,7 @@ ggplot() +
   geom_bar(aes(x = y, y = ..count../sum(..count..), fill = "realization"), alpha = 0.7) + 
   geom_segment(aes(x = mean(y) - sqrt(var(y)), xend = mean(y) + sqrt(var(y)), y = pos, yend = pos)) + 
   geom_point(aes(x = mean(y), y = pos)) + 
-  annotate("label", x = mean(y), y = pos + 0.01, label = "mean +/- sd")
+  annotate("label", x = mean(y), y = pos + 0.01, label = "mean +/- sd") + 
   labs(x = "x", y = "y", title = "observed draws from negbin GLMM")
 
 fit = glm.nb(y ~ x-1, link = "log", data = data_frame)
@@ -232,7 +259,7 @@ ggplot() +
   geom_histogram(aes(x = P$GLMM, 
                      y = ..count../sum(..count..), fill = "GLMM"), alpha = 0.5, breaks = 0:25/25) +
   labs(x = "P value for models", y = "proportion", title = "counts of P values for GLMM and GLM simulations", fill = "Type of model") +
-  xlim(0, 1) + ylim(0, 0.05)
+  xlim(0, 1) + ylim(0, 0.12)
 ggsave(paste("P count tau = ", tau, ", group = ", group, ", number of simuations = ", m, ".pdf"), width = 15, height = 10, units = "cm")
 
 # plot distribution of ICC when simulating a correlated GLMM
@@ -240,7 +267,7 @@ ggplot() +
   geom_histogram(aes(x = results_GLMM$ICC, y = ..count../sum(..count..), fill = "adjusted ICC"), breaks = 0:100/100) + 
   geom_histogram(aes(x = results_GLMM$ICC_conditional, y = ..count../sum(..count..), fill = "conditional ICC"), alpha = 0.5, breaks = 0:100/100) + 
   labs(x = "estimated ICC", title = "distribution of ICC when simulating a correlated GLMM", y = "proportion", fill = "") + 
-  xlim(0, 1) + ylim(0, 0.05)
+  xlim(0, 1) + ylim(0, 0.07)
 ggsave(paste("ICC tau = ", tau, ", group = ", group, ", number of simuations = ", m, ".pdf"), width = 15, height = 10, units = "cm")
 
 # plot comparison of p values for ICC
@@ -284,6 +311,7 @@ ggplot() +
   labs(x = "p values", y = "cumulative proportion", title = "cumulative p values", col = "")
 ggsave(paste("P cumulative tau = ", tau, ", group = ", group, ", number of simuations = ", m, ".pdf"), width = 15, height = 15, units = "cm")
 
+# distribution of alpha
 ggplot() + geom_histogram(aes(x = results$alpha, fill = "GLM", y = ..count../sum(..count..)), alpha = 0.8) + 
   geom_histogram(aes(x = results_GLMM$alpha, fill = "GLMM", y = ..count../sum(..count..)), alpha = 0.4) + 
   geom_vline(xintercept = mean(results$alpha[!is.na(results$alpha)])) + 
