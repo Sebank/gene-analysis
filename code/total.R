@@ -146,6 +146,7 @@ dim(logCPM)
 #plotMDS
 plotMDS(logCPM, labels = substr(pas_info$tissue, 1, 1), 
         col = as.numeric(pas_info$diseaseinflammation))
+# legend("top", legend = levels(pas_info$diseaseinflammation), col = 1:3, pch = 15)
 
 C=rbind("(CU-CH)-(IU-IH)"=c(0,0,0,0,1,0), 
         "(CA-CH)-(IA-IH)"=c(0,0,0,0,0,1),
@@ -294,6 +295,9 @@ dataSet = DESeqDataSetFromMatrix(
   colData = pas_info,
   design = ~ tissue * inflammation
 )
+
+vsd = vst(dataSet)
+DESeq2::plotPCA(vsd, intgroup = c("tissue", "inflammation"))
 
 #pre processing
 length(dataSet[, 1])
