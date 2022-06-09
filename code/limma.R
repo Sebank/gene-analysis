@@ -229,13 +229,10 @@ venn.3 = list("limma" = rownames(topTable(fit3, number = number, coef = 3, p.val
 
 ggvenn(venn.3, show_percentage = FALSE)
 
-G = length(res$atanh.correlations)
-res$atanh.correlations = sort(res$atanh.correlations)
-corfit$atanh.correlations = sort(corfit$atanh.correlations)
+G = length(voom_cor$atanh.correlations)
+voom_cor$atanh.correlations = sort(voom_cor$atanh.correlations)
 ggplot() + 
-        geom_histogram(aes(res$atanh.correlations, fill = "voom"), binwidth = 0.02, alpha = 0.6) + 
-        geom_histogram(aes(corfit$atanh.correlations, fill = "limma"), binwidth = 0.02, alpha = 0.6) +
-        geom_vline(aes(xintercept = c(res$atanh.correlations[round(0.15*G)], 
-                                      res$atanh.correlations[round(0.85*G)]), col = "voom")) +
-        geom_vline(aes(xintercept = c(corfit$atanh.correlations[round(0.15*G)], 
-                                      corfit$atanh.correlations[round(0.85*G)]), col = "limma"))
+        geom_histogram(aes(x = voom_cor$atanh.correlations, y = ..count../sum(..count..)), binwidth = 0.02) + 
+                geom_vline(aes(xintercept = c(voom_cor$atanh.correlations[round(0.15*G)], 
+                                      voom_cor$atanh.correlations[round(0.85*G)]))) +
+        labs(x = "atanh correlation", y = "proportion")
