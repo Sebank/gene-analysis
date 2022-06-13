@@ -10,5 +10,5 @@ Shows results and comparisons between them and does analysis of the different fi
 
 gene wise simulation.R
 
-Simulation of negative binomial distribution with relevant size factor estimated from count data in total.R. 
+Simulation of negative binomial distribution with relevant size factor estimated from count data in analysis pipeline.R. 
 Compares estimated distribution of GLMM and GLM for different correlation and proportion of correlation when the data is generated as GLMM. 
