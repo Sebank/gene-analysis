@@ -3,9 +3,9 @@ Code for project and master thesis
 
 analysis pipeline.R
 
-Showcases one way to utilize limma-voom and DESeq2 to perform gene expression cout data analysis. 
+Showcases one way to utilize limma-voom and DESeq2 to perform gene expression count data analysis. 
 A simple GLMM has also been implemented. 
-Does preprocessinig of data, removing data thought to be disruptive for the rest. 
+Does preprocessing of data, removing data thought to be disruptive for the rest. 
 Shows results and comparisons between them and does analysis of the different fits. 
 
 gene wise simulation.R
